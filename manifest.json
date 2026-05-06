@@ -5,7 +5,7 @@
   "action": {
     "title": "Лист персонажа",
     "icon": "https://www.owlbear.rodeo/icons/icon-192.png",
-    "popover": "./index.html",
+    "popover": "https://crashmax881-sys.github.io/dnd-sheet/index.html",
     "width": 400,
     "height": 600
   }
