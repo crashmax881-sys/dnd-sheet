@@ -20,7 +20,6 @@
     </div>
 
     <script type="module">
-        // Используем Skypack CDN - он стабильнее работает с CORS и модулями
         import OBR from "https://cdn.skypack.dev/@owlbear-rodeo/sdk";
 
         const SCHEMA = [
@@ -45,16 +44,16 @@
                             <input type="number" id="${stat.id}" value="10">
                         </div>
                         <div class="stat-actions">
-                            <div class="action-item" id="btn_${stat.id}_mod">
+                            <div class="action-item" id="btn_${stat.id}_mod" style="cursor: pointer;">
                                 <span>ПРОВЕРКА</span> <div class="mod-val" id="${stat.id}_mod">+0</div>
                             </div>
-                            <div class="action-item">
+                            <div class="action-item" id="btn_${stat.id}_save" style="cursor: pointer;">
                                 <span>СПАСБРОСОК</span> <div class="mod-val" id="${stat.id}_save">+0</div>
                             </div>
                         </div>
                         <div class="skills-list">
                             ${stat.skills.map(skill => `
-                                <div class="skill-item" id="btn_${stat.id}_${skill}">
+                                <div class="skill-item" id="btn_${stat.id}_${skill}" style="cursor: pointer;">
                                     <span>${skill.toUpperCase()}</span>
                                     <div class="mod-val" id="${stat.id}_${skill}">+0</div>
                                 </div>
@@ -65,10 +64,15 @@
                 container.insertAdjacentHTML('beforeend', html);
             });
 
-            // Назначаем обработчики событий программно
+            // Назначаем обработчики событий
             SCHEMA.forEach(stat => {
                 document.getElementById(stat.id).addEventListener('input', updateAll);
-                document.getElementById(`btn_${stat.id}_mod`).onclick = () => sendDiceRoll(stat.name, stat.id);
+                
+                // Проверка
+                document.getElementById(`btn_${stat.id}_mod`).onclick = () => sendDiceRoll(`${stat.name} (Проверка)`, stat.id);
+                // Спасбросок
+                document.getElementById(`btn_${stat.id}_save`).onclick = () => sendDiceRoll(`${stat.name} (Спасбросок)`, stat.id);
+                
                 stat.skills.forEach(skill => {
                     const skillBtn = document.getElementById(`btn_${stat.id}_${skill}`);
                     if (skillBtn) {
@@ -87,10 +91,8 @@
                 const mod = Math.floor((val - 10) / 2);
                 const modStr = (mod >= 0 ? '+' : '') + mod;
                 
-                const modEl = document.getElementById(`${stat.id}_mod`);
-                const saveEl = document.getElementById(`${stat.id}_save`);
-                if (modEl) modEl.innerText = modStr;
-                if (saveEl) saveEl.innerText = modStr;
+                if (document.getElementById(`${stat.id}_mod`)) document.getElementById(`${stat.id}_mod`).innerText = modStr;
+                if (document.getElementById(`${stat.id}_save`)) document.getElementById(`${stat.id}_save`).innerText = modStr;
 
                 stat.skills.forEach(skill => {
                     const skillEl = document.getElementById(`${stat.id}_${skill}`);
@@ -105,13 +107,22 @@
             const val = input ? input.value : 10;
             const mod = Math.floor((val - 10) / 2);
             
+            console.log(`Бросок для ${label}: d20 + ${mod}`);
+
             try {
+                // Пытаемся отправить сообщение в расширение Dice
                 await OBR.broadcast.sendMessage("re.owlbear.dice/roll", {
                     dice: [{ type: "d20", modifier: mod }],
                     label: label
-                });
+                }, { destination: "REMOTE" }); // Добавили параметр для надежности
+
+                // Визуальный отклик кнопки (кратковременное изменение цвета)
+                const statusEl = document.getElementById('status');
+                statusEl.innerText = `Бросаю: ${label}...`;
+                setTimeout(() => statusEl.innerText = "Готов", 1000);
+
             } catch (e) {
-                console.error("Dice error:", e);
+                console.error("Ошибка при отправке броска:", e);
             }
         }
 
@@ -123,9 +134,7 @@
                     if (el) data[s.id] = el.value;
                 });
                 await OBR.player.setMetadata({ "ru_dnd_sheet/v2": data });
-            } catch (e) { 
-                console.error("Save error:", e); 
-            }
+            } catch (e) { console.error("Save error:", e); }
         }
 
         OBR.onReady(async () => {
