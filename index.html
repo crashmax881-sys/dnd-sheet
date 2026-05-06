@@ -3,16 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <link rel="stylesheet" href="style.css">
-    <script src="https://unpkg.com/@owlbear-rodeo/sdk"></script>
 </head>
 <body>
     <div id="app">
         <div class="header">
-            <input type="text" id="charName" placeholder="Имя персонажа..." oninput="autoSave()">
+            <input type="text" id="charName" placeholder="Имя персонажа...">
         </div>
 
         <div id="stats-list">
-            <!-- Секции будут генерироваться JS для чистоты кода -->
+            <!-- Секции генерируются через JS -->
         </div>
 
         <div class="footer">
@@ -20,8 +19,10 @@
         </div>
     </div>
 
-    <script>
-        const OBR = window.OBR;
+    <script type="module">
+        // Загрузка SDK как модуля для исправления SyntaxError
+        import OBR from "https://unpkg.com/@owlbear-rodeo/sdk@latest?module";
+
         const SCHEMA = [
             { id: 'str', name: 'СИЛА', skills: ['Атлетика'] },
             { id: 'dex', name: 'ЛОВКОСТЬ', skills: ['Акробатика', 'Ловкость рук', 'Скрытность'] },
@@ -30,21 +31,21 @@
             { id: 'wis', name: 'МУДРОСТЬ', skills: ['Внимательность', 'Выживание', 'Медицина', 'Проницательность', 'Уход за животными'] },
             { id: 'cha', name: 'ХАРИЗМА', skills: ['Выступление', 'Запугивание', 'Обман', 'Убеждение'] }
         ];
-    
+
         function buildUI() {
             const container = document.getElementById('stats-list');
             if (!container) return;
-            container.innerHTML = ''; // Очистка
+            container.innerHTML = ''; 
             
             SCHEMA.forEach(stat => {
                 const html = `
                     <div class="stat-group">
                         <div class="stat-header">
                             <span>${stat.name}</span>
-                            <input type="number" id="${stat.id}" value="10" oninput="updateAll()">
+                            <input type="number" id="${stat.id}" value="10">
                         </div>
                         <div class="stat-actions">
-                            <div class="action-item" onclick="sendDiceRoll('${stat.name}', '${stat.id}')">
+                            <div class="action-item" id="btn_${stat.id}_mod">
                                 <span>ПРОВЕРКА</span> <div class="mod-val" id="${stat.id}_mod">+0</div>
                             </div>
                             <div class="action-item">
@@ -53,7 +54,7 @@
                         </div>
                         <div class="skills-list">
                             ${stat.skills.map(skill => `
-                                <div class="skill-item" onclick="sendDiceRoll('${skill}', '${stat.id}')">
+                                <div class="skill-item" id="btn_${stat.id}_${skill}">
                                     <span>${skill.toUpperCase()}</span>
                                     <div class="mod-val" id="${stat.id}_${skill}">+0</div>
                                 </div>
@@ -63,8 +64,17 @@
                 `;
                 container.insertAdjacentHTML('beforeend', html);
             });
+
+            // Назначаем обработчики событий программно
+            SCHEMA.forEach(stat => {
+                document.getElementById(stat.id).addEventListener('input', updateAll);
+                document.getElementById(`btn_${stat.id}_mod`).onclick = () => sendDiceRoll(stat.name, stat.id);
+                stat.skills.forEach(skill => {
+                    document.getElementById(`btn_${stat.id}_${skill}`).onclick = () => sendDiceRoll(skill, stat.id);
+                });
+            });
         }
-    
+
         function updateAll() {
             SCHEMA.forEach(stat => {
                 const input = document.getElementById(stat.id);
@@ -78,7 +88,7 @@
                 const saveEl = document.getElementById(`${stat.id}_save`);
                 if (modEl) modEl.innerText = modStr;
                 if (saveEl) saveEl.innerText = modStr;
-    
+
                 stat.skills.forEach(skill => {
                     const skillEl = document.getElementById(`${stat.id}_${skill}`);
                     if (skillEl) skillEl.innerText = modStr;
@@ -86,22 +96,23 @@
             });
             autoSave();
         }
-    
+
         async function sendDiceRoll(label, statId) {
             const input = document.getElementById(statId);
             const val = input ? input.value : 10;
             const mod = Math.floor((val - 10) / 2);
             
             try {
+                // Отправка команды в официальное расширение Dice
                 await OBR.broadcast.sendMessage("re.owlbear.dice/roll", {
                     dice: [{ type: "d20", modifier: mod }],
                     label: label
                 });
             } catch (e) {
-                console.error("Dice extension not found or error:", e);
+                console.error("Dice error:", e);
             }
         }
-    
+
         async function autoSave() {
             try {
                 const data = { name: document.getElementById('charName').value };
@@ -110,9 +121,12 @@
                     if (el) data[s.id] = el.value;
                 });
                 await OBR.player.setMetadata({ "ru_dnd_sheet/v2": data });
-            } catch (e) { console.error("Save error:", e); }
+            } catch (e) { 
+                console.error("Save error:", e); 
+            }
         }
-    
+
+        // Инициализация при готовности OBR
         OBR.onReady(async () => {
             try {
                 buildUI();
@@ -127,6 +141,8 @@
                     });
                 }
                 updateAll();
+                
+                document.getElementById('charName').addEventListener('input', autoSave);
                 document.getElementById('status').innerText = "Готов";
             } catch (err) {
                 console.error("Initialization error:", err);
