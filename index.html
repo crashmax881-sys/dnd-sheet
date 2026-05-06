@@ -97,26 +97,22 @@
             const val = input ? input.value : 10;
             const mod = Math.floor((val - 10) / 2);
             
-            console.log(`[Dice Roll] Сигнал для Dice: ${label}, Мод: ${mod}`);
+            // Получаем имя текущего игрока для Dice
+            const playerName = await OBR.player.getName();
 
             try {
-                // Пытаемся отправить сообщение в шину данных с флагом трансляции на все узлы
+                // Измененный формат сообщения: без указания destination, 
+                // так как это заставляет OBR использовать настройки по умолчанию
                 await OBR.broadcast.sendMessage("re.owlbear.dice/roll", {
                     dice: [{ type: "d20", modifier: mod }],
-                    label: label
-                }, { destination: "LOCAL" }); 
-                
-                // Дублируем для удаленных клиентов, если LOCAL не подхватывается плагином
-                await OBR.broadcast.sendMessage("re.owlbear.dice/roll", {
-                    dice: [{ type: "d20", modifier: mod }],
-                    label: label
-                }, { destination: "REMOTE" });
+                    label: `${playerName}: ${label}`
+                });
 
                 const status = document.getElementById('status');
-                status.innerText = `Бросок отправлен: ${label}`;
+                status.innerText = `Бросок: ${label}`;
                 setTimeout(() => status.innerText = "Готов", 2000);
             } catch (e) {
-                console.error("Ошибка при связи с Dice:", e);
+                console.error("Ошибка Dice:", e);
             }
         }
 
