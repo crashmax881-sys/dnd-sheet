@@ -5,7 +5,7 @@
   "action": {
     "title": "Лист персонажа",
     "icon": "https://www.owlbear.rodeo/icons/icon-192.png",
-    "popover": "index.html",
+    "popover": "./index.html",
     "width": 400,
     "height": 600
   }
