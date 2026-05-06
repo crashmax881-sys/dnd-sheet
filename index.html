@@ -3,97 +3,121 @@
 <head>
     <meta charset="UTF-8">
     <link rel="stylesheet" href="style.css">
-    <!-- Подключаем библиотеку Owlbear Rodeo SDK -->
     <script src="https://unpkg.com/@owlbear-rodeo/sdk"></script>
 </head>
 <body>
     <div id="app">
-        <h3>Лист персонажа</h3>
-        
-        <div class="field">
-            <label>Имя персонажа:</label>
-            <input type="text" id="charName" placeholder="Имя...">
+        <div class="header">
+            <input type="text" id="charName" placeholder="Имя персонажа..." oninput="autoSave()">
+            <input type="text" id="charClass" placeholder="Класс и Уровень" oninput="autoSave()">
         </div>
 
-        <div class="stats-grid">
-            <div class="stat-box">
-                <label>Сила</label>
-                <input type="number" id="str" value="10">
+        <div class="stats-container">
+            <!-- Шаблон для характеристики -->
+            <div class="stat-row" data-stat="str">
+                <button class="roll-btn" onclick="doRoll('СИЛА', 'str')">🎲</button>
+                <span class="stat-label">СИЛА</span>
+                <input type="number" id="str" value="10" oninput="updateUI('str')">
+                <span class="mod-badge" id="str_mod">+0</span>
             </div>
-            <div class="stat-box">
-                <label>Ловкость</label>
-                <input type="number" id="dex" value="10">
+
+            <div class="stat-row" data-stat="dex">
+                <button class="roll-btn" onclick="doRoll('ЛОВКОСТЬ', 'dex')">🎲</button>
+                <span class="stat-label">ЛОВКОСТЬ</span>
+                <input type="number" id="dex" value="10" oninput="updateUI('dex')">
+                <span class="mod-badge" id="dex_mod">+0</span>
             </div>
-            <div class="stat-box">
-                <label>Телосложение</label>
-                <input type="number" id="con" value="10">
+
+            <div class="stat-row" data-stat="con">
+                <button class="roll-btn" onclick="doRoll('ТЕЛO', 'con')">🎲</button>
+                <span class="stat-label">ТЕЛОсложение</span>
+                <input type="number" id="con" value="10" oninput="updateUI('con')">
+                <span class="mod-badge" id="con_mod">+0</span>
+            </div>
+
+            <div class="stat-row" data-stat="int">
+                <button class="roll-btn" onclick="doRoll('ИНТЕЛЛЕКТ', 'int')">🎲</button>
+                <span class="stat-label">ИНТЕЛЛЕКТ</span>
+                <input type="number" id="int" value="10" oninput="updateUI('int')">
+                <span class="mod-badge" id="int_mod">+0</span>
+            </div>
+
+            <div class="stat-row" data-stat="wis">
+                <button class="roll-btn" onclick="doRoll('МУДРОСТЬ', 'wis')">🎲</button>
+                <span class="stat-label">МУДРОСТЬ</span>
+                <input type="number" id="wis" value="10" oninput="updateUI('wis')">
+                <span class="mod-badge" id="wis_mod">+0</span>
+            </div>
+
+            <div class="stat-row" data-stat="cha">
+                <button class="roll-btn" onclick="doRoll('ХАРИЗМА', 'cha')">🎲</button>
+                <span class="stat-label">ХАРИЗМА</span>
+                <input type="number" id="cha" value="10" oninput="updateUI('cha')">
+                <span class="mod-badge" id="cha_mod">+0</span>
             </div>
         </div>
 
-        <div class="field">
-            <label>Хиты (HP):</label>
-            <input type="number" id="hp" value="10">
+        <div class="footer">
+            <p id="status">Загрузка данных...</p>
         </div>
-
-        <button id="saveBtn">Сохранить в токен</button>
-        <p id="status">Выберите токен на карте...</p>
     </div>
 
     <script>
         const OBR = window.OBR;
-        let currentItemId = null;
+        const STATS = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 
-        // Инициализация
-        OBR.onReady(async () => {
-            // Подписываемся на изменение выбора токена
-            OBR.player.onChange((player) => {
-                const selection = player.selection;
-                if (selection && selection.length > 0) {
-                    currentItemId = selection[0];
-                    loadData(currentItemId);
-                    document.getElementById('status').innerText = "Токен выбран";
-                } else {
-                    currentItemId = null;
-                    document.getElementById('status').innerText = "Токен не выбран";
-                }
-            });
-        });
+        // Расчет модификатора: (Значение - 10) / 2 вниз
+        function getMod(val) {
+            const m = Math.floor((val - 10) / 2);
+            return (m >= 0 ? '+' : '') + m;
+        }
 
-        // Функция сохранения данных в метаданные токена
-        async function saveData() {
-            if (!currentItemId) return alert("Сначала выберите токен!");
+        // Обновление интерфейса и автосохранение
+        function updateUI(statId) {
+            const val = document.getElementById(statId).value;
+            document.getElementById(statId + '_mod').innerText = getMod(val);
+            autoSave();
+        }
 
+        // Бросок кубика
+        async function doRoll(label, statId) {
+            const val = document.getElementById(statId).value;
+            const mod = Math.floor((val - 10) / 2);
+            const d20 = Math.floor(Math.random() * 20) + 1;
+            const total = d20 + mod;
+            
+            await OBR.player.sendMessage(`🎲 **${label}**: ${d20} (${getMod(val)}) = **${total}**`);
+        }
+
+        // Сохранение в личные метаданные игрока
+        async function autoSave() {
             const data = {
                 name: document.getElementById('charName').value,
-                str: document.getElementById('str').value,
-                dex: document.getElementById('dex').value,
-                con: document.getElementById('con').value,
-                hp: document.getElementById('hp').value
+                class: document.getElementById('charClass').value
             };
-
-            await OBR.scene.items.updateItems([currentItemId], (items) => {
-                for (let item of items) {
-                    // Сохраняем под уникальным ключом нашего расширения
-                    item.metadata["ru_sheet/data"] = data;
-                }
-            });
-            alert("Данные сохранены в токене!");
+            STATS.forEach(s => data[s] = document.getElementById(s).value);
+            
+            await OBR.player.setMetadata({ "ru_dnd_sheet/v1": data });
+            document.getElementById('status').innerText = "Данные сохранены";
         }
 
-        // Функция загрузки данных из токена
-        async function loadData(id) {
-            const items = await OBR.scene.items.getItems([id]);
-            if (items.length > 0 && items[0].metadata["ru_sheet/data"]) {
-                const data = items[0].metadata["ru_sheet/data"];
+        OBR.onReady(async () => {
+            // Загрузка данных при старте
+            const metadata = await OBR.player.getMetadata();
+            const data = metadata["ru_dnd_sheet/v1"];
+            
+            if (data) {
                 document.getElementById('charName').value = data.name || "";
-                document.getElementById('str').value = data.str || 10;
-                document.getElementById('dex').value = data.dex || 10;
-                document.getElementById('con').value = data.con || 10;
-                document.getElementById('hp').value = data.hp || 10;
+                document.getElementById('charClass').value = data.class || "";
+                STATS.forEach(s => {
+                    if (data[s]) {
+                        document.getElementById(s).value = data[s];
+                        document.getElementById(s + '_mod').innerText = getMod(data[s]);
+                    }
+                });
             }
-        }
-
-        document.getElementById('saveBtn').onclick = saveData;
+            document.getElementById('status').innerText = "Лист готов";
+        });
     </script>
 </body>
 </html>
