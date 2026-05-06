@@ -9,114 +9,108 @@
     <div id="app">
         <div class="header">
             <input type="text" id="charName" placeholder="Имя персонажа..." oninput="autoSave()">
-            <input type="text" id="charClass" placeholder="Класс и Уровень" oninput="autoSave()">
         </div>
 
-        <div class="stats-container">
-            <!-- Шаблон для характеристики -->
-            <div class="stat-row" data-stat="str">
-                <button class="roll-btn" onclick="doRoll('СИЛА', 'str')">🎲</button>
-                <span class="stat-label">СИЛА</span>
-                <input type="number" id="str" value="10" oninput="updateUI('str')">
-                <span class="mod-badge" id="str_mod">+0</span>
-            </div>
-
-            <div class="stat-row" data-stat="dex">
-                <button class="roll-btn" onclick="doRoll('ЛОВКОСТЬ', 'dex')">🎲</button>
-                <span class="stat-label">ЛОВКОСТЬ</span>
-                <input type="number" id="dex" value="10" oninput="updateUI('dex')">
-                <span class="mod-badge" id="dex_mod">+0</span>
-            </div>
-
-            <div class="stat-row" data-stat="con">
-                <button class="roll-btn" onclick="doRoll('ТЕЛO', 'con')">🎲</button>
-                <span class="stat-label">ТЕЛОсложение</span>
-                <input type="number" id="con" value="10" oninput="updateUI('con')">
-                <span class="mod-badge" id="con_mod">+0</span>
-            </div>
-
-            <div class="stat-row" data-stat="int">
-                <button class="roll-btn" onclick="doRoll('ИНТЕЛЛЕКТ', 'int')">🎲</button>
-                <span class="stat-label">ИНТЕЛЛЕКТ</span>
-                <input type="number" id="int" value="10" oninput="updateUI('int')">
-                <span class="mod-badge" id="int_mod">+0</span>
-            </div>
-
-            <div class="stat-row" data-stat="wis">
-                <button class="roll-btn" onclick="doRoll('МУДРОСТЬ', 'wis')">🎲</button>
-                <span class="stat-label">МУДРОСТЬ</span>
-                <input type="number" id="wis" value="10" oninput="updateUI('wis')">
-                <span class="mod-badge" id="wis_mod">+0</span>
-            </div>
-
-            <div class="stat-row" data-stat="cha">
-                <button class="roll-btn" onclick="doRoll('ХАРИЗМА', 'cha')">🎲</button>
-                <span class="stat-label">ХАРИЗМА</span>
-                <input type="number" id="cha" value="10" oninput="updateUI('cha')">
-                <span class="mod-badge" id="cha_mod">+0</span>
-            </div>
+        <div id="stats-list">
+            <!-- Секции будут генерироваться JS для чистоты кода -->
         </div>
 
         <div class="footer">
-            <p id="status">Загрузка данных...</p>
+            <p id="status">Загрузка...</p>
         </div>
     </div>
 
     <script>
         const OBR = window.OBR;
-        const STATS = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
+        
+        // Структура данных характеристик и навыков
+        const SCHEMA = [
+            { id: 'str', name: 'СИЛА', skills: ['Атлетика'] },
+            { id: 'dex', name: 'ЛОВКОСТЬ', skills: ['Акробатика', 'Ловкость рук', 'Скрытность'] },
+            { id: 'con', name: 'ТЕЛОСЛОЖЕНИЕ', skills: [] },
+            { id: 'int', name: 'ИНТЕЛЛЕКТ', skills: ['Анализ', 'История', 'Магия', 'Природа', 'Религия'] },
+            { id: 'wis', name: 'МУДРОСТЬ', skills: ['Внимательность', 'Выживание', 'Медицина', 'Проницательность', 'Уход за животными'] },
+            { id: 'cha', name: 'ХАРИЗМА', skills: ['Выступление', 'Запугивание', 'Обман', 'Убеждение'] }
+        ];
 
-        // Расчет модификатора: (Значение - 10) / 2 вниз
-        function getMod(val) {
-            const m = Math.floor((val - 10) / 2);
-            return (m >= 0 ? '+' : '') + m;
+        // Инициализация интерфейса
+        function buildUI() {
+            const container = document.getElementById('stats-list');
+            SCHEMA.forEach(stat => {
+                let html = `
+                    <div class="stat-group">
+                        <div class="stat-header">
+                            <span>${stat.name}</span>
+                            <input type="number" id="${stat.id}" value="10" oninput="updateAll()">
+                        </div>
+                        <div class="stat-actions">
+                            <div class="action-item" onclick="sendDiceRoll('${stat.name}', '${stat.id}')">
+                                <span>ПРОВЕРКА</span> <div class="mod-val" id="${stat.id}_mod">+0</div>
+                            </div>
+                            <div class="action-item">
+                                <span>СПАСБРОСОК</span> <div class="mod-val" id="${stat.id}_save">+0</div>
+                            </div>
+                        </div>
+                        <div class="skills-list">
+                            ${stat.skills.map(skill => `
+                                <div class="skill-item" onclick="sendDiceRoll('${skill}', '${stat.id}')">
+                                    <span>${skill.toUpperCase()}</span>
+                                    <div class="mod-val" id="${stat.id}_${skill}">+0</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+            });
         }
 
-        // Обновление интерфейса и автосохранение
-        function updateUI(statId) {
-            const val = document.getElementById(statId).value;
-            document.getElementById(statId + '_mod').innerText = getMod(val);
+        function updateAll() {
+            SCHEMA.forEach(stat => {
+                const val = document.getElementById(stat.id).value;
+                const mod = Math.floor((val - 10) / 2);
+                const modStr = (mod >= 0 ? '+' : '') + mod;
+                
+                document.getElementById(`${stat.id}_mod`).innerText = modStr;
+                document.getElementById(`${stat.id}_save`).innerText = modStr;
+                stat.skills.forEach(skill => {
+                    document.getElementById(`${stat.id}_${skill}`).innerText = modStr;
+                });
+            });
             autoSave();
         }
 
-        // Бросок кубика
-        async function doRoll(label, statId) {
+        // Интеграция с расширением Dice
+        async function sendDiceRoll(label, statId) {
             const val = document.getElementById(statId).value;
             const mod = Math.floor((val - 10) / 2);
-            const d20 = Math.floor(Math.random() * 20) + 1;
-            const total = d20 + mod;
             
-            await OBR.player.sendMessage(`🎲 **${label}**: ${d20} (${getMod(val)}) = **${total}**`);
+            // Формат сообщения для расширения Dice (v2)
+            // Мы транслируем сообщение в шину данных Owlbear
+            OBR.broadcast.sendMessage("re.owlbear.dice/roll", {
+                dice: [{ type: "d20", modifier: mod }],
+                label: label
+            });
         }
 
-        // Сохранение в личные метаданные игрока
         async function autoSave() {
-            const data = {
-                name: document.getElementById('charName').value,
-                class: document.getElementById('charClass').value
-            };
-            STATS.forEach(s => data[s] = document.getElementById(s).value);
-            
-            await OBR.player.setMetadata({ "ru_dnd_sheet/v1": data });
-            document.getElementById('status').innerText = "Данные сохранены";
+            const data = { name: document.getElementById('charName').value };
+            SCHEMA.forEach(s => data[s.id] = document.getElementById(s.id).value);
+            await OBR.player.setMetadata({ "ru_dnd_sheet/v2": data });
         }
 
         OBR.onReady(async () => {
-            // Загрузка данных при старте
+            buildUI();
             const metadata = await OBR.player.getMetadata();
-            const data = metadata["ru_dnd_sheet/v1"];
-            
+            const data = metadata["ru_dnd_sheet/v2"];
             if (data) {
                 document.getElementById('charName').value = data.name || "";
-                document.getElementById('charClass').value = data.class || "";
-                STATS.forEach(s => {
-                    if (data[s]) {
-                        document.getElementById(s).value = data[s];
-                        document.getElementById(s + '_mod').innerText = getMod(data[s]);
-                    }
+                SCHEMA.forEach(s => {
+                    if (data[s.id]) document.getElementById(s.id).value = data[s.id];
                 });
             }
-            document.getElementById('status').innerText = "Лист готов";
+            updateAll();
+            document.getElementById('status').innerText = "Готов";
         });
     </script>
 </body>
