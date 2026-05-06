@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="style.css">
+    <!-- Подключаем библиотеку Owlbear Rodeo SDK -->
+    <script src="https://unpkg.com/@owlbear-rodeo/sdk"></script>
+</head>
+<body>
+    <div id="app">
+        <h3>Лист персонажа</h3>
+        
+        <div class="field">
+            <label>Имя персонажа:</label>
+            <input type="text" id="charName" placeholder="Имя...">
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-box">
+                <label>СИЛ</label>
+                <input type="number" id="str" value="10">
+            </div>
+            <div class="stat-box">
+                <label>ЛОВ</label>
+                <input type="number" id="dex" value="10">
+            </div>
+            <div class="stat-box">
+                <label>ТЕЛ</label>
+                <input type="number" id="con" value="10">
+            </div>
+        </div>
+
+        <div class="field">
+            <label>Хиты (HP):</label>
+            <input type="number" id="hp" value="10">
+        </div>
+
+        <button id="saveBtn">Сохранить в токен</button>
+        <p id="status">Выберите токен на карте...</p>
+    </div>
+
+    <script>
+        const OBR = window.OBR;
+        let currentItemId = null;
+
+        // Инициализация
+        OBR.onReady(async () => {
+            // Подписываемся на изменение выбора токена
+            OBR.player.onChange((player) => {
+                const selection = player.selection;
+                if (selection && selection.length > 0) {
+                    currentItemId = selection[0];
+                    loadData(currentItemId);
+                    document.getElementById('status').innerText = "Токен выбран";
+                } else {
+                    currentItemId = null;
+                    document.getElementById('status').innerText = "Токен не выбран";
+                }
+            });
+        });
+
+        // Функция сохранения данных в метаданные токена
+        async function saveData() {
+            if (!currentItemId) return alert("Сначала выберите токен!");
+
+            const data = {
+                name: document.getElementById('charName').value,
+                str: document.getElementById('str').value,
+                dex: document.getElementById('dex').value,
+                con: document.getElementById('con').value,
+                hp: document.getElementById('hp').value
+            };
+
+            await OBR.scene.items.updateItems([currentItemId], (items) => {
+                for (let item of items) {
+                    // Сохраняем под уникальным ключом нашего расширения
+                    item.metadata["ru_sheet/data"] = data;
+                }
+            });
+            alert("Данные сохранены в токене!");
+        }
+
+        // Функция загрузки данных из токена
+        async function loadData(id) {
+            const items = await OBR.scene.items.getItems([id]);
+            if (items.length > 0 && items[0].metadata["ru_sheet/data"]) {
+                const data = items[0].metadata["ru_sheet/data"];
+                document.getElementById('charName').value = data.name || "";
+                document.getElementById('str').value = data.str || 10;
+                document.getElementById('dex').value = data.dex || 10;
+                document.getElementById('con').value = data.con || 10;
+                document.getElementById('hp').value = data.hp || 10;
+            }
+        }
+
+        document.getElementById('saveBtn').onclick = saveData;
+    </script>
+</body>
+</html>
