@@ -22,8 +22,6 @@
 
     <script>
         const OBR = window.OBR;
-        
-        // Структура данных характеристик и навыков
         const SCHEMA = [
             { id: 'str', name: 'СИЛА', skills: ['Атлетика'] },
             { id: 'dex', name: 'ЛОВКОСТЬ', skills: ['Акробатика', 'Ловкость рук', 'Скрытность'] },
@@ -32,12 +30,14 @@
             { id: 'wis', name: 'МУДРОСТЬ', skills: ['Внимательность', 'Выживание', 'Медицина', 'Проницательность', 'Уход за животными'] },
             { id: 'cha', name: 'ХАРИЗМА', skills: ['Выступление', 'Запугивание', 'Обман', 'Убеждение'] }
         ];
-
-        // Инициализация интерфейса
+    
         function buildUI() {
             const container = document.getElementById('stats-list');
+            if (!container) return;
+            container.innerHTML = ''; // Очистка
+            
             SCHEMA.forEach(stat => {
-                let html = `
+                const html = `
                     <div class="stat-group">
                         <div class="stat-header">
                             <span>${stat.name}</span>
@@ -64,53 +64,74 @@
                 container.insertAdjacentHTML('beforeend', html);
             });
         }
-
+    
         function updateAll() {
             SCHEMA.forEach(stat => {
-                const val = document.getElementById(stat.id).value;
+                const input = document.getElementById(stat.id);
+                if (!input) return;
+                
+                const val = input.value;
                 const mod = Math.floor((val - 10) / 2);
                 const modStr = (mod >= 0 ? '+' : '') + mod;
                 
-                document.getElementById(`${stat.id}_mod`).innerText = modStr;
-                document.getElementById(`${stat.id}_save`).innerText = modStr;
+                const modEl = document.getElementById(`${stat.id}_mod`);
+                const saveEl = document.getElementById(`${stat.id}_save`);
+                if (modEl) modEl.innerText = modStr;
+                if (saveEl) saveEl.innerText = modStr;
+    
                 stat.skills.forEach(skill => {
-                    document.getElementById(`${stat.id}_${skill}`).innerText = modStr;
+                    const skillEl = document.getElementById(`${stat.id}_${skill}`);
+                    if (skillEl) skillEl.innerText = modStr;
                 });
             });
             autoSave();
         }
-
-        // Интеграция с расширением Dice
+    
         async function sendDiceRoll(label, statId) {
-            const val = document.getElementById(statId).value;
+            const input = document.getElementById(statId);
+            const val = input ? input.value : 10;
             const mod = Math.floor((val - 10) / 2);
             
-            // Формат сообщения для расширения Dice (v2)
-            // Мы транслируем сообщение в шину данных Owlbear
-            OBR.broadcast.sendMessage("re.owlbear.dice/roll", {
-                dice: [{ type: "d20", modifier: mod }],
-                label: label
-            });
-        }
-
-        async function autoSave() {
-            const data = { name: document.getElementById('charName').value };
-            SCHEMA.forEach(s => data[s.id] = document.getElementById(s.id).value);
-            await OBR.player.setMetadata({ "ru_dnd_sheet/v2": data });
-        }
-
-        OBR.onReady(async () => {
-            buildUI();
-            const metadata = await OBR.player.getMetadata();
-            const data = metadata["ru_dnd_sheet/v2"];
-            if (data) {
-                document.getElementById('charName').value = data.name || "";
-                SCHEMA.forEach(s => {
-                    if (data[s.id]) document.getElementById(s.id).value = data[s.id];
+            try {
+                await OBR.broadcast.sendMessage("re.owlbear.dice/roll", {
+                    dice: [{ type: "d20", modifier: mod }],
+                    label: label
                 });
+            } catch (e) {
+                console.error("Dice extension not found or error:", e);
             }
-            updateAll();
-            document.getElementById('status').innerText = "Готов";
+        }
+    
+        async function autoSave() {
+            try {
+                const data = { name: document.getElementById('charName').value };
+                SCHEMA.forEach(s => {
+                    const el = document.getElementById(s.id);
+                    if (el) data[s.id] = el.value;
+                });
+                await OBR.player.setMetadata({ "ru_dnd_sheet/v2": data });
+            } catch (e) { console.error("Save error:", e); }
+        }
+    
+        OBR.onReady(async () => {
+            try {
+                buildUI();
+                const metadata = await OBR.player.getMetadata();
+                const data = metadata["ru_dnd_sheet/v2"];
+                
+                if (data) {
+                    if (data.name) document.getElementById('charName').value = data.name;
+                    SCHEMA.forEach(s => {
+                        const el = document.getElementById(s.id);
+                        if (el && data[s.id]) el.value = data[s.id];
+                    });
+                }
+                updateAll();
+                document.getElementById('status').innerText = "Готов";
+            } catch (err) {
+                console.error("Initialization error:", err);
+                document.getElementById('status').innerText = "Ошибка запуска";
+            }
         });
     </script>
 </body>
