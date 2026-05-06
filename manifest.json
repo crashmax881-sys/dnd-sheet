@@ -4,9 +4,9 @@
   "manifest_version": 1,
   "action": {
     "title": "Лист персонажа",
-    "icon": "https://www.owlbear.rodeo/icons/icon-192.png",
+    "icon": "https://img.icons8.com/color/48/dungeons-and-dragons.png",
     "popover": "https://crashmax881-sys.github.io/dnd-sheet/index.html",
-    "width": 400,
-    "height": 600
+    "width": 450,
+    "height": 700
   }
 }
