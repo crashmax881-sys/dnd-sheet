@@ -11,11 +11,10 @@
         </div>
 
         <div id="stats-list">
-            <!-- Контент генерируется скриптом -->
-        </div>
+            </div>
 
         <div class="footer">
-            <p id="status">Инициализация...</p>
+            <p id="status">Инициализация dddice...</p>
         </div>
     </div>
 
@@ -71,7 +70,8 @@
             });
 
             SCHEMA.forEach(stat => {
-                document.getElementById(stat.id).oninput = updateAll;
+                const el = document.getElementById(stat.id);
+                if (el) el.oninput = updateAll;
             });
         }
 
@@ -96,23 +96,31 @@
             const input = document.getElementById(statId);
             const val = input ? input.value : 10;
             const mod = Math.floor((val - 10) / 2);
-            
-            // Получаем имя текущего игрока для Dice
-            const playerName = await OBR.player.getName();
+            const name = document.getElementById('charName').value || "Герой";
+
+            console.log(`[dddice] Бросок для ${label} с модом ${mod}`);
 
             try {
-                // Измененный формат сообщения: без указания destination, 
-                // так как это заставляет OBR использовать настройки по умолчанию
-                await OBR.broadcast.sendMessage("re.owlbear.dice/roll", {
-                    dice: [{ type: "d20", modifier: mod }],
-                    label: `${playerName}: ${label}`
-                });
+                // dddice использует формат 'd20' + модификатор.
+                // Интеграция dddice с Owlbear Rodeo слушает сообщения через свой протокол.
+                await OBR.broadcast.sendMessage("com.dddice.dice/roll", {
+                    dice: [{ type: "d20", theme: "dddice-red" }], // тему можно менять
+                    operator: { value: mod, type: "add" },
+                    external_id: label,
+                    label: `${name}: ${label}`
+                }, { destination: "LOCAL" });
 
-                const status = document.getElementById('status');
-                status.innerText = `Бросок: ${label}`;
-                setTimeout(() => status.innerText = "Готов", 2000);
+                // Дополнительно отправляем для других игроков
+                await OBR.broadcast.sendMessage("com.dddice.dice/roll", {
+                    dice: [{ type: "d20", theme: "dddice-red" }],
+                    operator: { value: mod, type: "add" },
+                    label: `${name}: ${label}`
+                }, { destination: "REMOTE" });
+
+                document.getElementById('status').innerText = `🚀 dddice: ${label}`;
+                setTimeout(() => document.getElementById('status').innerText = "Готов", 2000);
             } catch (e) {
-                console.error("Ошибка Dice:", e);
+                console.error("Ошибка dddice:", e);
             }
         }
 
