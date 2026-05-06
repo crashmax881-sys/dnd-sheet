@@ -20,8 +20,8 @@
     </div>
 
     <script type="module">
-        // Загрузка SDK как модуля для исправления SyntaxError
-        import OBR from "https://unpkg.com/@owlbear-rodeo/sdk@latest?module";
+        // Используем Skypack CDN - он стабильнее работает с CORS и модулями
+        import OBR from "https://cdn.skypack.dev/@owlbear-rodeo/sdk";
 
         const SCHEMA = [
             { id: 'str', name: 'СИЛА', skills: ['Атлетика'] },
@@ -70,7 +70,10 @@
                 document.getElementById(stat.id).addEventListener('input', updateAll);
                 document.getElementById(`btn_${stat.id}_mod`).onclick = () => sendDiceRoll(stat.name, stat.id);
                 stat.skills.forEach(skill => {
-                    document.getElementById(`btn_${stat.id}_${skill}`).onclick = () => sendDiceRoll(skill, stat.id);
+                    const skillBtn = document.getElementById(`btn_${stat.id}_${skill}`);
+                    if (skillBtn) {
+                        skillBtn.onclick = () => sendDiceRoll(skill, stat.id);
+                    }
                 });
             });
         }
@@ -103,7 +106,6 @@
             const mod = Math.floor((val - 10) / 2);
             
             try {
-                // Отправка команды в официальное расширение Dice
                 await OBR.broadcast.sendMessage("re.owlbear.dice/roll", {
                     dice: [{ type: "d20", modifier: mod }],
                     label: label
@@ -126,7 +128,6 @@
             }
         }
 
-        // Инициализация при готовности OBR
         OBR.onReady(async () => {
             try {
                 buildUI();
