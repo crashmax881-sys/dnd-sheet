@@ -11,11 +11,11 @@
         </div>
 
         <div id="stats-list">
-            <!-- Секции генерируются через JS -->
+            <!-- Контент генерируется скриптом -->
         </div>
 
         <div class="footer">
-            <p id="status">Загрузка...</p>
+            <p id="status">Инициализация...</p>
         </div>
     </div>
 
@@ -44,16 +44,16 @@
                             <input type="number" id="${stat.id}" value="10">
                         </div>
                         <div class="stat-actions">
-                            <div class="action-item" id="btn_${stat.id}_mod" style="cursor: pointer;">
+                            <div class="action-item roll-trigger" data-label="${stat.name} (Проверка)" data-stat="${stat.id}">
                                 <span>ПРОВЕРКА</span> <div class="mod-val" id="${stat.id}_mod">+0</div>
                             </div>
-                            <div class="action-item" id="btn_${stat.id}_save" style="cursor: pointer;">
+                            <div class="action-item roll-trigger" data-label="${stat.name} (Спасбросок)" data-stat="${stat.id}">
                                 <span>СПАСБРОСОК</span> <div class="mod-val" id="${stat.id}_save">+0</div>
                             </div>
                         </div>
                         <div class="skills-list">
                             ${stat.skills.map(skill => `
-                                <div class="skill-item" id="btn_${stat.id}_${skill}" style="cursor: pointer;">
+                                <div class="skill-item roll-trigger" data-label="${skill}" data-stat="${stat.id}">
                                     <span>${skill.toUpperCase()}</span>
                                     <div class="mod-val" id="${stat.id}_${skill}">+0</div>
                                 </div>
@@ -64,21 +64,14 @@
                 container.insertAdjacentHTML('beforeend', html);
             });
 
-            // Назначаем обработчики событий
+            document.querySelectorAll('.roll-trigger').forEach(el => {
+                el.onclick = () => {
+                    sendDiceRoll(el.getAttribute('data-label'), el.getAttribute('data-stat'));
+                };
+            });
+
             SCHEMA.forEach(stat => {
-                document.getElementById(stat.id).addEventListener('input', updateAll);
-                
-                // Проверка
-                document.getElementById(`btn_${stat.id}_mod`).onclick = () => sendDiceRoll(`${stat.name} (Проверка)`, stat.id);
-                // Спасбросок
-                document.getElementById(`btn_${stat.id}_save`).onclick = () => sendDiceRoll(`${stat.name} (Спасбросок)`, stat.id);
-                
-                stat.skills.forEach(skill => {
-                    const skillBtn = document.getElementById(`btn_${stat.id}_${skill}`);
-                    if (skillBtn) {
-                        skillBtn.onclick = () => sendDiceRoll(skill, stat.id);
-                    }
-                });
+                document.getElementById(stat.id).oninput = updateAll;
             });
         }
 
@@ -86,17 +79,14 @@
             SCHEMA.forEach(stat => {
                 const input = document.getElementById(stat.id);
                 if (!input) return;
-                
-                const val = input.value;
-                const mod = Math.floor((val - 10) / 2);
+                const mod = Math.floor((input.value - 10) / 2);
                 const modStr = (mod >= 0 ? '+' : '') + mod;
                 
                 if (document.getElementById(`${stat.id}_mod`)) document.getElementById(`${stat.id}_mod`).innerText = modStr;
                 if (document.getElementById(`${stat.id}_save`)) document.getElementById(`${stat.id}_save`).innerText = modStr;
-
                 stat.skills.forEach(skill => {
-                    const skillEl = document.getElementById(`${stat.id}_${skill}`);
-                    if (skillEl) skillEl.innerText = modStr;
+                    const skEl = document.getElementById(`${stat.id}_${skill}`);
+                    if (skEl) skEl.innerText = modStr;
                 });
             });
             autoSave();
@@ -107,57 +97,48 @@
             const val = input ? input.value : 10;
             const mod = Math.floor((val - 10) / 2);
             
-            console.log(`Бросок для ${label}: d20 + ${mod}`);
+            console.log(`[Dice Roll] Сигнал для Dice: ${label}, Мод: ${mod}`);
 
             try {
-                // Пытаемся отправить сообщение в расширение Dice
+                // Пытаемся отправить сообщение в шину данных с флагом трансляции на все узлы
                 await OBR.broadcast.sendMessage("re.owlbear.dice/roll", {
                     dice: [{ type: "d20", modifier: mod }],
                     label: label
-                }, { destination: "REMOTE" }); // Добавили параметр для надежности
+                }, { destination: "LOCAL" }); 
+                
+                // Дублируем для удаленных клиентов, если LOCAL не подхватывается плагином
+                await OBR.broadcast.sendMessage("re.owlbear.dice/roll", {
+                    dice: [{ type: "d20", modifier: mod }],
+                    label: label
+                }, { destination: "REMOTE" });
 
-                // Визуальный отклик кнопки (кратковременное изменение цвета)
-                const statusEl = document.getElementById('status');
-                statusEl.innerText = `Бросаю: ${label}...`;
-                setTimeout(() => statusEl.innerText = "Готов", 1000);
-
+                const status = document.getElementById('status');
+                status.innerText = `Бросок отправлен: ${label}`;
+                setTimeout(() => status.innerText = "Готов", 2000);
             } catch (e) {
-                console.error("Ошибка при отправке броска:", e);
+                console.error("Ошибка при связи с Dice:", e);
             }
         }
 
         async function autoSave() {
             try {
                 const data = { name: document.getElementById('charName').value };
-                SCHEMA.forEach(s => {
-                    const el = document.getElementById(s.id);
-                    if (el) data[s.id] = el.value;
-                });
+                SCHEMA.forEach(s => data[s.id] = document.getElementById(s.id).value);
                 await OBR.player.setMetadata({ "ru_dnd_sheet/v2": data });
-            } catch (e) { console.error("Save error:", e); }
+            } catch (e) { }
         }
 
         OBR.onReady(async () => {
-            try {
-                buildUI();
-                const metadata = await OBR.player.getMetadata();
-                const data = metadata["ru_dnd_sheet/v2"];
-                
-                if (data) {
-                    if (data.name) document.getElementById('charName').value = data.name;
-                    SCHEMA.forEach(s => {
-                        const el = document.getElementById(s.id);
-                        if (el && data[s.id]) el.value = data[s.id];
-                    });
-                }
-                updateAll();
-                
-                document.getElementById('charName').addEventListener('input', autoSave);
-                document.getElementById('status').innerText = "Готов";
-            } catch (err) {
-                console.error("Initialization error:", err);
-                document.getElementById('status').innerText = "Ошибка запуска";
+            buildUI();
+            const metadata = await OBR.player.getMetadata();
+            const data = metadata["ru_dnd_sheet/v2"];
+            if (data) {
+                document.getElementById('charName').value = data.name || "";
+                SCHEMA.forEach(s => { if (data[s.id]) document.getElementById(s.id).value = data[s.id]; });
             }
+            updateAll();
+            document.getElementById('charName').oninput = autoSave;
+            document.getElementById('status').innerText = "Готов";
         });
     </script>
 </body>
