@@ -65,12 +65,17 @@
             document.querySelectorAll('.roll-trigger').forEach(el => {
                 el.onclick = () => sendDiceRoll(el.getAttribute('data-label'), el.getAttribute('data-stat'));
             });
-            SCHEMA.forEach(stat => document.getElementById(stat.id).oninput = updateAll);
+            SCHEMA.forEach(stat => {
+                const input = document.getElementById(stat.id);
+                if (input) input.oninput = updateAll;
+            });
         }
 
         function updateAll() {
             SCHEMA.forEach(stat => {
-                const val = document.getElementById(stat.id).value;
+                const input = document.getElementById(stat.id);
+                if (!input) return;
+                const val = input.value;
                 const mod = Math.floor((val - 10) / 2);
                 const modStr = (mod >= 0 ? '+' : '') + mod;
                 if (document.getElementById(`${stat.id}_mod`)) document.getElementById(`${stat.id}_mod`).innerText = modStr;
@@ -84,14 +89,15 @@
         }
 
         async function sendDiceRoll(label, statId) {
-            const val = document.getElementById(statId).value;
+            const input = document.getElementById(statId);
+            const val = input ? input.value : 10;
             const mod = Math.floor((val - 10) / 2);
             const charName = document.getElementById('charName').value || "Герой";
             const status = document.getElementById('status');
 
             status.innerText = "⏳ Бросаю...";
 
-            // Новая нотация: d20+3 или d20-1
+            // Нотация кубика. Убрали тему, чтобы использовать системную по умолчанию.
             const diceNotation = mod === 0 ? "d20" : `d20${mod > 0 ? '+' : ''}${mod}`;
 
             try {
@@ -104,7 +110,7 @@
                         "Accept": "application/json"
                     },
                     body: JSON.stringify({
-                        dice: [{ type: diceNotation, theme: "dddice-red" }],
+                        dice: [{ type: diceNotation }], // ТЕМА УДАЛЕНА для исправления 403
                         room: ROOM_SLUG,
                         label: `${charName}: ${label}`
                     })
@@ -114,9 +120,9 @@
                     status.innerText = "🎲 Бросок выполнен!";
                     status.style.color = "#00ffcc";
                 } else {
-                    const errorMsg = await response.text();
-                    console.error("Dddice API Error:", errorMsg);
-                    status.innerText = "❌ Ошибка API: " + response.status;
+                    const errorJson = await response.json();
+                    console.error("Dddice API Error Details:", errorJson);
+                    status.innerText = "❌ Ошибка: " + (errorJson.data?.message || response.status);
                     status.style.color = "#ff4444";
                 }
             } catch (e) {
@@ -129,7 +135,10 @@
 
         async function autoSave() {
             const data = { name: document.getElementById('charName').value };
-            SCHEMA.forEach(s => data[s.id] = document.getElementById(s.id).value);
+            SCHEMA.forEach(s => {
+                const input = document.getElementById(s.id);
+                if (input) data[s.id] = input.value;
+            });
             await OBR.player.setMetadata({ "ru_dnd_sheet/v2": data });
         }
 
@@ -139,7 +148,10 @@
             const data = metadata["ru_dnd_sheet/v2"];
             if (data) {
                 document.getElementById('charName').value = data.name || "";
-                SCHEMA.forEach(s => { if (data[s.id]) document.getElementById(s.id).value = data[s.id]; });
+                SCHEMA.forEach(s => { 
+                    const input = document.getElementById(s.id);
+                    if (input && data[s.id]) input.value = data[s.id]; 
+                });
             }
             updateAll();
             document.getElementById('charName').oninput = autoSave;
