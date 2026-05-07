@@ -1,6 +1,6 @@
 {
   "name": "D&D Character Sheet",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "manifest_version": 1,
   "action": {
     "title": "Лист персонажа",
