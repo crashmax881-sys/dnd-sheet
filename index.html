@@ -20,7 +20,7 @@
 
         const API_KEY = "YGz09N0ieJkYsDTYlEOORaEjwHfmUCsZyzbJVq5Tccc4b24e"; 
         const ROOM_SLUG = "VaKE-Br";
-        let USER_DICE_THEME = null;
+        let USER_THEME_ID = null;
 
         const SCHEMA = [
             { id: 'str', name: 'СИЛА', skills: ['Атлетика'] },
@@ -31,16 +31,16 @@
             { id: 'cha', name: 'ХАРИЗМА', skills: ['Выступление', 'Запугивание', 'Обман', 'Убеждение'] }
         ];
 
-        // Получаем реально доступную тему d20
-        async function getValidTheme() {
+        async function fetchDiceTheme() {
             try {
                 const res = await fetch("https://dddice.com/api/1.0/dice", {
                     headers: { "Authorization": `Bearer ${API_KEY}` }
                 });
                 const json = await res.json();
+                // Находим любой d20 и берем именно dice_theme_id
                 const d20 = json.data.find(d => d.type === 'd20');
-                return d20 ? d20.dice_theme_id : "dddice-standard";
-            } catch (e) { return "dddice-standard"; }
+                return d20 ? d20.dice_theme_id : null;
+            } catch (e) { return null; }
         }
 
         function buildUI() {
@@ -68,13 +68,17 @@
             document.querySelectorAll('.roll-trigger').forEach(el => {
                 el.onclick = () => sendDiceRoll(el.getAttribute('data-label'), el.getAttribute('data-stat'));
             });
-            SCHEMA.forEach(stat => document.getElementById(stat.id).oninput = updateAll);
+            SCHEMA.forEach(stat => {
+                const input = document.getElementById(stat.id);
+                if (input) input.oninput = updateAll;
+            });
         }
 
         function updateAll() {
             SCHEMA.forEach(stat => {
-                const val = document.getElementById(stat.id).value;
-                const mod = Math.floor((val - 10) / 2);
+                const input = document.getElementById(stat.id);
+                if (!input) return;
+                const mod = Math.floor((input.value - 10) / 2);
                 const modStr = (mod >= 0 ? '+' : '') + mod;
                 if (document.getElementById(`${stat.id}_mod`)) document.getElementById(`${stat.id}_mod`).innerText = modStr;
                 if (document.getElementById(`${stat.id}_save`)) document.getElementById(`${stat.id}_save`).innerText = modStr;
@@ -91,47 +95,45 @@
             const charName = document.getElementById('charName').value || "Герой";
             const status = document.getElementById('status');
             
-            if (!USER_DICE_THEME) USER_DICE_THEME = await getValidTheme();
+            if (!USER_THEME_ID) USER_THEME_ID = await fetchDiceTheme();
 
-            status.innerText = "⏳ Отправка...";
+            status.innerText = "🎲 Бросаю...";
 
             try {
-                // Самый надежный формат по документации: бросок через уравнение (equation)
-                // dddice API v1 /roll принимает Либо dice[], Либо equation. 
-                // Equation — самый стабильный вариант для внешних систем.
+                // Передаем уравнение И dice_theme_id (именно под таким ключом для уравнений)
                 const response = await fetch("https://dddice.com/api/1.0/roll", {
                     method: "POST",
                     headers: {
                         "Authorization": `Bearer ${API_KEY}`,
-                        "Content-Type": "application/json",
-                        "Accept": "application/json"
+                        "Content-Type": "application/json"
                     },
                     body: JSON.stringify({
                         room: ROOM_SLUG,
                         equation: `1d20${mod >= 0 ? '+' : ''}${mod}`,
-                        theme: USER_DICE_THEME,
+                        dice_theme_id: USER_THEME_ID,
                         label: `${charName}: ${label}`
                     })
                 });
 
                 if (response.ok) {
-                    status.innerText = "🎲 Бросок выполнен!";
+                    status.innerText = "Успех!";
                     status.style.color = "#00ffcc";
                 } else {
-                    const errorData = await response.json();
-                    console.error("Dddice API Detailed Error:", errorData);
-                    status.innerText = "❌ Ошибка: " + response.status;
+                    const err = await response.json();
+                    console.error("DEBUG dddice 422:", err);
+                    status.innerText = "Ошибка: " + response.status;
                     status.style.color = "#ff4444";
                 }
-            } catch (e) {
-                status.innerText = "❌ Ошибка сети";
-            }
-            setTimeout(() => { status.style.color = ""; status.innerText = "Готов"; }, 3000);
+            } catch (e) { status.innerText = "Ошибка сети"; }
+            setTimeout(() => { status.style.color = ""; status.innerText = "Готов"; }, 2000);
         }
 
         async function autoSave() {
             const data = { name: document.getElementById('charName').value };
-            SCHEMA.forEach(s => data[s.id] = document.getElementById(s.id).value);
+            SCHEMA.forEach(s => {
+                const input = document.getElementById(s.id);
+                if (input) data[s.id] = input.value;
+            });
             await OBR.player.setMetadata({ "ru_dnd_sheet/v2": data });
         }
 
@@ -141,10 +143,13 @@
             const data = metadata["ru_dnd_sheet/v2"];
             if (data) {
                 document.getElementById('charName').value = data.name || "";
-                SCHEMA.forEach(s => { if (data[s.id]) document.getElementById(s.id).value = data[s.id]; });
+                SCHEMA.forEach(s => { 
+                    const input = document.getElementById(s.id);
+                    if (input && data[s.id]) input.value = data[s.id]; 
+                });
             }
             updateAll();
-            USER_DICE_THEME = await getValidTheme();
+            USER_THEME_ID = await fetchDiceTheme();
             document.getElementById('charName').oninput = autoSave;
             document.getElementById('status').innerText = "Готов";
         });
