@@ -11,7 +11,7 @@
         </div>
         <div id="stats-list"></div>
         <div class="footer">
-            <p id="status">Готов (v1.19.0)</p>
+            <p id="status">Готов (v1.21.0)</p>
         </div>
     </div>
 
@@ -78,14 +78,15 @@
         }
 
         async function sendDiceRoll(label, statId) {
-            const mod = Math.floor((document.getElementById(statId).value - 10) / 2);
+            const val = document.getElementById(statId).value;
+            const mod = Math.floor((val - 10) / 2);
             const charName = document.getElementById('charName').value || "Герой";
             const status = document.getElementById('status');
 
             status.innerText = "🎲 Бросаю...";
 
             try {
-                // Прямой бросок через уравнение БЕЗ указания темы
+                // Полное соответствие документации https://docs.dddice.com/api/#roll-POSTapi-1.0-roll
                 const response = await fetch("https://dddice.com/api/1.0/roll", {
                     method: "POST",
                     headers: {
@@ -94,8 +95,15 @@
                         "Accept": "application/json"
                     },
                     body: JSON.stringify({
+                        dice: [{ 
+                            type: "d20", 
+                            theme: "dddice-black" // Базовая системная тема
+                        }],
                         room: ROOM_SLUG,
-                        equation: `1d20${mod >= 0 ? '+' : ''}${mod}`,
+                        operator: { 
+                            value: mod, 
+                            type: "add" 
+                        },
                         label: `${charName}: ${label}`
                     })
                 });
