@@ -97,7 +97,7 @@
 
             status.innerText = "⏳ Бросаю...";
 
-            // Нотация кубика. Убрали тему, чтобы использовать системную по умолчанию.
+            // Нотация кубика
             const diceNotation = mod === 0 ? "d20" : `d20${mod > 0 ? '+' : ''}${mod}`;
 
             try {
@@ -110,7 +110,10 @@
                         "Accept": "application/json"
                     },
                     body: JSON.stringify({
-                        dice: [{ type: diceNotation }], // ТЕМА УДАЛЕНА для исправления 403
+                        dice: [{ 
+                            type: diceNotation, 
+                            theme: "dddice-standard" // Используем стандартную бесплатную тему
+                        }],
                         room: ROOM_SLUG,
                         label: `${charName}: ${label}`
                     })
