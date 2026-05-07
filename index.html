@@ -11,7 +11,7 @@
         </div>
         <div id="stats-list"></div>
         <div class="footer">
-            <p id="status">Подключение к dddice...</p>
+            <p id="status">Инициализация...</p>
         </div>
     </div>
 
@@ -20,7 +20,7 @@
 
         const API_KEY = "YGz09N0ieJkYsDTYlEOORaEjwHfmUCsZyzbJVq5Tccc4b24e"; 
         const ROOM_SLUG = "VaKE-Br";
-        let ACTIVE_DICE_ID = null; // ID кубика из твоей коллекции
+        let USER_DICE_THEME = null;
 
         const SCHEMA = [
             { id: 'str', name: 'СИЛА', skills: ['Атлетика'] },
@@ -31,20 +31,16 @@
             { id: 'cha', name: 'ХАРИЗМА', skills: ['Выступление', 'Запугивание', 'Обман', 'Убеждение'] }
         ];
 
-        // 1. Получаем список разрешенных тебе кубиков
-        async function initDice() {
+        // Получаем реально доступную тему d20
+        async function getValidTheme() {
             try {
                 const res = await fetch("https://dddice.com/api/1.0/dice", {
-                    headers: { "Authorization": `Bearer ${API_KEY}`, "Accept": "application/json" }
+                    headers: { "Authorization": `Bearer ${API_KEY}` }
                 });
                 const json = await res.json();
-                // Ищем любой d20 в твоей коллекции
                 const d20 = json.data.find(d => d.type === 'd20');
-                if (d20) {
-                    ACTIVE_DICE_ID = d20.dice_theme_id;
-                    console.log("Найден разрешенный кубик:", ACTIVE_DICE_ID);
-                }
-            } catch (e) { console.error("Ошибка инициализации коллекции:", e); }
+                return d20 ? d20.dice_theme_id : "dddice-standard";
+            } catch (e) { return "dddice-standard"; }
         }
 
         function buildUI() {
@@ -64,12 +60,7 @@
                             </div>
                         </div>
                         <div class="skills-list">
-                            ${stat.skills.map(skill => `
-                                <div class="skill-item roll-trigger" data-label="${skill}" data-stat="${stat.id}">
-                                    <span>${skill.toUpperCase()}</span>
-                                    <div class="mod-val" id="${stat.id}_${skill}">+0</div>
-                                </div>
-                            `).join('')}
+                            ${stat.skills.map(skill => `<div class="skill-item roll-trigger" data-label="${skill}" data-stat="${stat.id}"><span>${skill.toUpperCase()}</span><div class="mod-val" id="${stat.id}_${skill}">+0</div></div>`).join('')}
                         </div>
                     </div>
                 `);
@@ -82,9 +73,8 @@
 
         function updateAll() {
             SCHEMA.forEach(stat => {
-                const input = document.getElementById(stat.id);
-                if (!input) return;
-                const mod = Math.floor((input.value - 10) / 2);
+                const val = document.getElementById(stat.id).value;
+                const mod = Math.floor((val - 10) / 2);
                 const modStr = (mod >= 0 ? '+' : '') + mod;
                 if (document.getElementById(`${stat.id}_mod`)) document.getElementById(`${stat.id}_mod`).innerText = modStr;
                 if (document.getElementById(`${stat.id}_save`)) document.getElementById(`${stat.id}_save`).innerText = modStr;
@@ -97,43 +87,46 @@
         }
 
         async function sendDiceRoll(label, statId) {
-            const val = document.getElementById(statId).value;
-            const mod = Math.floor((val - 10) / 2);
+            const mod = Math.floor((document.getElementById(statId).value - 10) / 2);
             const charName = document.getElementById('charName').value || "Герой";
             const status = document.getElementById('status');
+            
+            if (!USER_DICE_THEME) USER_DICE_THEME = await getValidTheme();
 
-            if (!ACTIVE_DICE_ID) await initDice();
-            status.innerText = "🎲 Бросаю...";
+            status.innerText = "⏳ Отправка...";
 
             try {
-                // Прямой бросок через массив dice с проверенным темой-ID
+                // Самый надежный формат по документации: бросок через уравнение (equation)
+                // dddice API v1 /roll принимает Либо dice[], Либо equation. 
+                // Equation — самый стабильный вариант для внешних систем.
                 const response = await fetch("https://dddice.com/api/1.0/roll", {
                     method: "POST",
                     headers: {
                         "Authorization": `Bearer ${API_KEY}`,
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
                     },
                     body: JSON.stringify({
-                        dice: [{ 
-                            type: "d20", 
-                            theme: ACTIVE_DICE_ID || "dddice-standard" 
-                        }],
                         room: ROOM_SLUG,
-                        operator: { value: mod, type: "add" },
+                        equation: `1d20${mod >= 0 ? '+' : ''}${mod}`,
+                        theme: USER_DICE_THEME,
                         label: `${charName}: ${label}`
                     })
                 });
 
                 if (response.ok) {
-                    status.innerText = "Успех!";
+                    status.innerText = "🎲 Бросок выполнен!";
                     status.style.color = "#00ffcc";
                 } else {
-                    const err = await response.json();
-                    status.innerText = "Ошибка: " + response.status;
-                    console.error(err);
+                    const errorData = await response.json();
+                    console.error("Dddice API Detailed Error:", errorData);
+                    status.innerText = "❌ Ошибка: " + response.status;
+                    status.style.color = "#ff4444";
                 }
-            } catch (e) { status.innerText = "Ошибка сети"; }
-            setTimeout(() => { status.style.color = ""; status.innerText = "Готов"; }, 2000);
+            } catch (e) {
+                status.innerText = "❌ Ошибка сети";
+            }
+            setTimeout(() => { status.style.color = ""; status.innerText = "Готов"; }, 3000);
         }
 
         async function autoSave() {
@@ -151,7 +144,7 @@
                 SCHEMA.forEach(s => { if (data[s.id]) document.getElementById(s.id).value = data[s.id]; });
             }
             updateAll();
-            await initDice(); // Предзагрузка темы
+            USER_DICE_THEME = await getValidTheme();
             document.getElementById('charName').oninput = autoSave;
             document.getElementById('status').innerText = "Готов";
         });
