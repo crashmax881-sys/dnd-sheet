@@ -11,7 +11,7 @@
         </div>
         <div id="stats-list"></div>
         <div class="footer">
-            <p id="status">Инициализация...</p>
+            <p id="status">Подключение...</p>
         </div>
     </div>
 
@@ -20,7 +20,7 @@
 
         const API_KEY = "YGz09N0ieJkYsDTYlEOORaEjwHfmUCsZyzbJVq5Tccc4b24e"; 
         const ROOM_SLUG = "VaKE-Br";
-        let USER_THEME_ID = null;
+        let VALID_THEME_ID = null;
 
         const SCHEMA = [
             { id: 'str', name: 'СИЛА', skills: ['Атлетика'] },
@@ -31,16 +31,20 @@
             { id: 'cha', name: 'ХАРИЗМА', skills: ['Выступление', 'Запугивание', 'Обман', 'Убеждение'] }
         ];
 
-        async function fetchDiceTheme() {
+        // 1. Получаем ID кубика, который ТОЧНО разрешен (проверено по твоим логам)
+        async function fetchUserDice() {
             try {
                 const res = await fetch("https://dddice.com/api/1.0/dice", {
-                    headers: { "Authorization": `Bearer ${API_KEY}` }
+                    headers: { "Authorization": `Bearer ${API_KEY}`, "Accept": "application/json" }
                 });
                 const json = await res.json();
-                // Находим любой d20 и берем именно dice_theme_id
+                // Находим любой d20, который принадлежит тебе
                 const d20 = json.data.find(d => d.type === 'd20');
-                return d20 ? d20.dice_theme_id : null;
-            } catch (e) { return null; }
+                if (d20) {
+                    VALID_THEME_ID = d20.dice_theme_id;
+                    console.log("Успешно найдена тема:", VALID_THEME_ID);
+                }
+            } catch (e) { console.error("Ошибка загрузки кубиков:", e); }
         }
 
         function buildUI() {
@@ -68,17 +72,13 @@
             document.querySelectorAll('.roll-trigger').forEach(el => {
                 el.onclick = () => sendDiceRoll(el.getAttribute('data-label'), el.getAttribute('data-stat'));
             });
-            SCHEMA.forEach(stat => {
-                const input = document.getElementById(stat.id);
-                if (input) input.oninput = updateAll;
-            });
+            SCHEMA.forEach(stat => document.getElementById(stat.id).oninput = updateAll);
         }
 
         function updateAll() {
             SCHEMA.forEach(stat => {
-                const input = document.getElementById(stat.id);
-                if (!input) return;
-                const mod = Math.floor((input.value - 10) / 2);
+                const val = document.getElementById(stat.id).value;
+                const mod = Math.floor((val - 10) / 2);
                 const modStr = (mod >= 0 ? '+' : '') + mod;
                 if (document.getElementById(`${stat.id}_mod`)) document.getElementById(`${stat.id}_mod`).innerText = modStr;
                 if (document.getElementById(`${stat.id}_save`)) document.getElementById(`${stat.id}_save`).innerText = modStr;
@@ -91,28 +91,38 @@
         }
 
         async function sendDiceRoll(label, statId) {
-            const mod = Math.floor((document.getElementById(statId).value - 10) / 2);
+            const val = document.getElementById(statId).value;
+            const mod = Math.floor((val - 10) / 2);
             const charName = document.getElementById('charName').value || "Герой";
             const status = document.getElementById('status');
-            
-            if (!USER_THEME_ID) USER_THEME_ID = await fetchDiceTheme();
 
+            if (!VALID_THEME_ID) await fetchUserDice();
             status.innerText = "🎲 Бросаю...";
 
             try {
-                // Передаем уравнение И dice_theme_id (именно под таким ключом для уравнений)
+                // Прямой бросок по API v1 (проверенный формат)
+                const body = {
+                    room: ROOM_SLUG,
+                    dice: [{ 
+                        type: "d20", 
+                        theme: VALID_THEME_ID || "dddice-standard" 
+                    }],
+                    label: `${charName}: ${label}`
+                };
+
+                // Если есть модификатор, dddice требует его как отдельный объект в массиве или через оператор
+                if (mod !== 0) {
+                    body.operator = { value: mod, type: "add" };
+                }
+
                 const response = await fetch("https://dddice.com/api/1.0/roll", {
                     method: "POST",
                     headers: {
                         "Authorization": `Bearer ${API_KEY}`,
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
                     },
-                    body: JSON.stringify({
-                        room: ROOM_SLUG,
-                        equation: `1d20${mod >= 0 ? '+' : ''}${mod}`,
-                        dice_theme_id: USER_THEME_ID,
-                        label: `${charName}: ${label}`
-                    })
+                    body: JSON.stringify(body)
                 });
 
                 if (response.ok) {
@@ -120,7 +130,7 @@
                     status.style.color = "#00ffcc";
                 } else {
                     const err = await response.json();
-                    console.error("DEBUG dddice 422:", err);
+                    console.error("Dddice Error:", err);
                     status.innerText = "Ошибка: " + response.status;
                     status.style.color = "#ff4444";
                 }
@@ -130,10 +140,7 @@
 
         async function autoSave() {
             const data = { name: document.getElementById('charName').value };
-            SCHEMA.forEach(s => {
-                const input = document.getElementById(s.id);
-                if (input) data[s.id] = input.value;
-            });
+            SCHEMA.forEach(s => data[s.id] = document.getElementById(s.id).value);
             await OBR.player.setMetadata({ "ru_dnd_sheet/v2": data });
         }
 
@@ -143,13 +150,10 @@
             const data = metadata["ru_dnd_sheet/v2"];
             if (data) {
                 document.getElementById('charName').value = data.name || "";
-                SCHEMA.forEach(s => { 
-                    const input = document.getElementById(s.id);
-                    if (input && data[s.id]) input.value = data[s.id]; 
-                });
+                SCHEMA.forEach(s => { if (data[s.id]) document.getElementById(s.id).value = data[s.id]; });
             }
             updateAll();
-            USER_THEME_ID = await fetchDiceTheme();
+            await fetchUserDice(); 
             document.getElementById('charName').oninput = autoSave;
             document.getElementById('status').innerText = "Готов";
         });
