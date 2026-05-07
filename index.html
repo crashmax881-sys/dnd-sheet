@@ -18,6 +18,7 @@
     <script type="module">
         import OBR from "https://cdn.skypack.dev/@owlbear-rodeo/sdk";
 
+        // Твой ключ и комната
         const API_KEY = "YGz09N0ieJkYsDTYlEOORaEjwHfmUCsZyzbJVq5Tccc4b24e"; 
         const ROOM_SLUG = "VaKE-Br";
 
@@ -88,20 +89,23 @@
             const charName = document.getElementById('charName').value || "Герой";
             const status = document.getElementById('status');
 
-            status.innerText = "⏳ Отправка...";
+            status.innerText = "⏳ Бросаю...";
+
+            // Новая нотация: d20+3 или d20-1
+            const diceNotation = mod === 0 ? "d20" : `d20${mod > 0 ? '+' : ''}${mod}`;
 
             try {
                 const response = await fetch("https://dddice.com/api/1.0/roll", {
                     method: "POST",
+                    mode: 'cors',
                     headers: {
                         "Authorization": `Bearer ${API_KEY}`,
                         "Content-Type": "application/json",
+                        "Accept": "application/json"
                     },
                     body: JSON.stringify({
-                        dice: [{ type: "d20", theme: "dddice-red" }],
+                        dice: [{ type: diceNotation, theme: "dddice-red" }],
                         room: ROOM_SLUG,
-                        external_id: label,
-                        operator: { value: mod, type: "add" },
                         label: `${charName}: ${label}`
                     })
                 });
@@ -111,12 +115,12 @@
                     status.style.color = "#00ffcc";
                 } else {
                     const errorMsg = await response.text();
+                    console.error("Dddice API Error:", errorMsg);
                     status.innerText = "❌ Ошибка API: " + response.status;
                     status.style.color = "#ff4444";
-                    console.error("Dddice Error:", errorMsg);
                 }
             } catch (e) {
-                status.innerText = "❌ Ошибка сети (CORS?)";
+                status.innerText = "❌ Ошибка сети";
                 status.style.color = "#ff4444";
                 console.error(e);
             }
