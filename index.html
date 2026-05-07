@@ -11,7 +11,7 @@
         </div>
         <div id="stats-list"></div>
         <div class="footer">
-            <p id="status">Готов (v1.21.0)</p>
+            <p id="status">Загрузка (v1.22.0)</p>
         </div>
     </div>
 
@@ -20,6 +20,7 @@
 
         const API_KEY = "YGz09N0ieJkYsDTYlEOORaEjwHfmUCsZyzbJVq5Tccc4b24e"; 
         const ROOM_SLUG = "VaKE-Br";
+        let USER_ACTIVE_THEME = null;
 
         const SCHEMA = [
             { id: 'str', name: 'СИЛА', skills: ['Атлетика'] },
@@ -29,6 +30,21 @@
             { id: 'wis', name: 'МУДРОСТЬ', skills: ['Внимательность', 'Выживание', 'Медицина', 'Проницательность', 'Уход за животными'] },
             { id: 'cha', name: 'ХАРИЗМА', skills: ['Выступление', 'Запугивание', 'Обман', 'Убеждение'] }
         ];
+
+        // Функция получения активной темы пользователя
+        async function fetchActiveTheme() {
+            try {
+                const response = await fetch("https://dddice.com/api/1.0/user", {
+                    headers: { "Authorization": "Bearer " + API_KEY, "Accept": "application/json" }
+                });
+                const json = await response.json();
+                // Сохраняем ID темы, которая выбрана у пользователя как активная
+                USER_ACTIVE_THEME = json.data.dice_theme_id;
+                console.log("Активная тема пользователя:", USER_ACTIVE_THEME);
+            } catch (e) {
+                console.error("Не удалось получить тему пользователя:", e);
+            }
+        }
 
         function buildUI() {
             const container = document.getElementById('stats-list');
@@ -78,15 +94,26 @@
         }
 
         async function sendDiceRoll(label, statId) {
-            const val = document.getElementById(statId).value;
-            const mod = Math.floor((val - 10) / 2);
+            const mod = Math.floor((document.getElementById(statId).value - 10) / 2);
             const charName = document.getElementById('charName').value || "Герой";
             const status = document.getElementById('status');
 
             status.innerText = "🎲 Бросаю...";
 
             try {
-                // Полное соответствие документации https://docs.dddice.com/api/#roll-POSTapi-1.0-roll
+                const body = {
+                    dice: [{ 
+                        type: "d20", 
+                        theme: USER_ACTIVE_THEME // Используем динамическую тему
+                    }],
+                    room: ROOM_SLUG,
+                    operator: { value: mod, type: "add" },
+                    label: `${charName}: ${label}`
+                };
+
+                // Если тему получить не удалось, удаляем поле, чтобы сервер сам выбрал дефолт
+                if (!USER_ACTIVE_THEME) delete body.dice[0].theme;
+
                 const response = await fetch("https://dddice.com/api/1.0/roll", {
                     method: "POST",
                     headers: {
@@ -94,18 +121,7 @@
                         "Content-Type": "application/json",
                         "Accept": "application/json"
                     },
-                    body: JSON.stringify({
-                        dice: [{ 
-                            type: "d20", 
-                            theme: "dddice-black" // Базовая системная тема
-                        }],
-                        room: ROOM_SLUG,
-                        operator: { 
-                            value: mod, 
-                            type: "add" 
-                        },
-                        label: `${charName}: ${label}`
-                    })
+                    body: JSON.stringify(body)
                 });
 
                 if (response.ok) {
@@ -113,13 +129,11 @@
                     status.style.color = "#00ffcc";
                 } else {
                     const err = await response.json();
-                    console.error("Ошибка API:", err);
                     status.innerText = "Ошибка: " + response.status;
                     status.style.color = "#ff4444";
                 }
             } catch (e) { 
                 status.innerText = "Ошибка сети"; 
-                console.error(e);
             }
             setTimeout(() => { status.style.color = ""; status.innerText = "Готов"; }, 2000);
         }
@@ -145,7 +159,9 @@
                 });
             }
             updateAll();
+            await fetchActiveTheme(); // Получаем тему при старте
             document.getElementById('charName').oninput = autoSave;
+            document.getElementById('status').innerText = "Готов";
         });
     </script>
 </body>
