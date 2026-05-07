@@ -11,7 +11,7 @@
         </div>
         <div id="stats-list"></div>
         <div class="footer">
-            <p id="status">Загрузка (v1.22.0)</p>
+            <p id="status">Синхронизация тем (v1.24.0)</p>
         </div>
     </div>
 
@@ -20,7 +20,7 @@
 
         const API_KEY = "YGz09N0ieJkYsDTYlEOORaEjwHfmUCsZyzbJVq5Tccc4b24e"; 
         const ROOM_SLUG = "VaKE-Br";
-        let USER_ACTIVE_THEME = null;
+        let SELECTED_THEME_ID = "dddice-standard-black"; // Резервный ID
 
         const SCHEMA = [
             { id: 'str', name: 'СИЛА', skills: ['Атлетика'] },
@@ -31,18 +31,24 @@
             { id: 'cha', name: 'ХАРИЗМА', skills: ['Выступление', 'Запугивание', 'Обман', 'Убеждение'] }
         ];
 
-        // Функция получения активной темы пользователя
-        async function fetchActiveTheme() {
+        // Функция получения списка доступных тем (согласно вашей ссылке)
+        async function fetchAvailableThemes() {
             try {
-                const response = await fetch("https://dddice.com/api/1.0/user", {
-                    headers: { "Authorization": "Bearer " + API_KEY, "Accept": "application/json" }
+                const response = await fetch("https://dddice.com/api/1.0/theme", {
+                    headers: { 
+                        "Authorization": "Bearer " + API_KEY, 
+                        "Accept": "application/json" 
+                    }
                 });
                 const json = await response.json();
-                // Сохраняем ID темы, которая выбрана у пользователя как активная
-                USER_ACTIVE_THEME = json.data.dice_theme_id;
-                console.log("Активная тема пользователя:", USER_ACTIVE_THEME);
+                
+                // Если темы найдены, берем ID первой доступной
+                if (json.data && json.data.length > 0) {
+                    SELECTED_THEME_ID = json.data[0].id;
+                    console.log("Выбрана тема из вашего списка:", SELECTED_THEME_ID);
+                }
             } catch (e) {
-                console.error("Не удалось получить тему пользователя:", e);
+                console.error("Ошибка при получении тем:", e);
             }
         }
 
@@ -101,19 +107,6 @@
             status.innerText = "🎲 Бросаю...";
 
             try {
-                const body = {
-                    dice: [{ 
-                        type: "d20", 
-                        theme: USER_ACTIVE_THEME // Используем динамическую тему
-                    }],
-                    room: ROOM_SLUG,
-                    operator: { value: mod, type: "add" },
-                    label: `${charName}: ${label}`
-                };
-
-                // Если тему получить не удалось, удаляем поле, чтобы сервер сам выбрал дефолт
-                if (!USER_ACTIVE_THEME) delete body.dice[0].theme;
-
                 const response = await fetch("https://dddice.com/api/1.0/roll", {
                     method: "POST",
                     headers: {
@@ -121,7 +114,15 @@
                         "Content-Type": "application/json",
                         "Accept": "application/json"
                     },
-                    body: JSON.stringify(body)
+                    body: JSON.stringify({
+                        dice: [{ 
+                            type: "d20", 
+                            theme: SELECTED_THEME_ID 
+                        }],
+                        room: ROOM_SLUG,
+                        operator: { value: mod, type: "add" },
+                        label: `${charName}: ${label}`
+                    })
                 });
 
                 if (response.ok) {
@@ -129,6 +130,7 @@
                     status.style.color = "#00ffcc";
                 } else {
                     const err = await response.json();
+                    console.error("Ошибка броска:", err);
                     status.innerText = "Ошибка: " + response.status;
                     status.style.color = "#ff4444";
                 }
@@ -159,7 +161,7 @@
                 });
             }
             updateAll();
-            await fetchActiveTheme(); // Получаем тему при старте
+            await fetchAvailableThemes();
             document.getElementById('charName').oninput = autoSave;
             document.getElementById('status').innerText = "Готов";
         });
