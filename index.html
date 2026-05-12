@@ -11,7 +11,7 @@
         </div>
         <div id="stats-list"></div>
         <div class="footer">
-            <p id="status">Готов (v1.29.0)</p>
+            <p id="status">Готов к игре (v1.31.0)</p>
         </div>
     </div>
 
@@ -36,22 +36,28 @@
             const total = d20 + mod;
 
             try {
-                const viewport = await OBR.viewport.getRect();
-                const center = {
-                    x: viewport.x + viewport.width / 2,
-                    y: viewport.y + viewport.height / 2
-                };
+                // Проверяем, готова ли сцена
+                const isReady = await OBR.scene.isReady();
+                if (!isReady) {
+                    alert("Сцена не загружена. Открой карту!");
+                    return;
+                }
+
+                // Получаем границы видимой области (Documentation: viewport.getBounds)
+                const bounds = await OBR.viewport.getBounds();
+                const centerX = (bounds.min.x + bounds.max.x) / 2;
+                const centerY = (bounds.min.y + bounds.max.y) / 2;
 
                 const baseId = `dice_${Date.now()}`;
                 
-                // Создаем кубик как Label
+                // Создаем кубик (Label)
                 const diceItem = {
                     id: baseId,
                     type: "LABEL",
                     name: "DiceResult",
-                    position: center,
+                    position: { x: centerX, y: centerY },
                     visible: true,
-                    layer: "MOUNT",
+                    layer: "CHARACTER",
                     text: {
                         plainText: `${total}`,
                         style: {
@@ -61,54 +67,57 @@
                             textAlign: "CENTER",
                             verticalAlign: "MIDDLE",
                             padding: 20,
-                            backgroundColor: d20 === 20 ? "#D4AF37" : (d20 === 1 ? "#330000" : "#4361ee"),
+                            backgroundColor: d20 === 20 ? "#FFD700" : (d20 === 1 ? "#8B0000" : "#3F51B5"),
                             backgroundOpacity: 1,
                             borderRadius: 25,
                             borderWidth: 8,
-                            borderColor: "#ffffff"
+                            borderColor: "#FFFFFF"
                         },
                         width: 160,
                         height: 160
-                    }
+                    },
+                    metadata: { "ru.dnd.sheet/dice": true }
                 };
 
-                // Надпись над кубиком
-                const nameTag = {
+                // Подпись броска
+                const tagItem = {
                     id: baseId + "_tag",
                     type: "LABEL",
                     name: "DiceTag",
-                    position: { x: center.x, y: center.y - 120 },
+                    position: { x: centerX, y: centerY - 130 },
                     visible: true,
-                    layer: "MOUNT",
+                    layer: "CHARACTER",
                     text: {
-                        plainText: `${charName}\n${label}`,
+                        plainText: `${charName}: ${label}`,
                         style: {
                             fillColor: "#ffffff",
-                            fontSize: 30,
+                            fontSize: 32,
                             textAlign: "CENTER",
-                            backgroundColor: "#111111",
-                            backgroundOpacity: 0.85,
+                            backgroundColor: "#212121",
+                            backgroundOpacity: 0.9,
                             padding: 10,
-                            borderRadius: 8
+                            borderRadius: 10
                         },
                         width: 400,
-                        height: 90
+                        height: 80
                     }
                 };
 
-                // ИСПОЛЬЗУЕМ КОРРЕКТНЫЙ МЕТОД addItems СОГЛАСНО ДОКУМЕНТАЦИИ
-                await OBR.scene.items.addItems([diceItem, nameTag]);
+                // Добавляем предметы (Documentation: scene.items.addItems)
+                await OBR.scene.items.addItems([diceItem, tagItem]);
 
-                // Удаление через 7 секунд
+                // Удаляем через 8 секунд (Documentation: scene.items.deleteItems)
                 setTimeout(async () => {
                     await OBR.scene.items.deleteItems([baseId, baseId + "_tag"]);
-                }, 7000);
+                }, 8000);
 
             } catch (e) {
-                console.error("Ошибка при выполнении броска:", e);
+                console.error("Ошибка броска:", e);
+                document.getElementById('status').innerText = "Ошибка броска!";
             }
         }
 
+        // --- Интерфейс и логика синхронизации ---
         function buildUI() {
             const container = document.getElementById('stats-list');
             if (!container) return;
@@ -118,7 +127,7 @@
                     <div class="stat-group">
                         <div class="stat-header"><span>${stat.name}</span><input type="number" id="${stat.id}" value="10"></div>
                         <div class="stat-actions">
-                            <div class="action-item roll-trigger" data-label="${stat.name} (Проверка)" data-stat="${stat.id}">
+                            <div class="action-item roll-trigger" data-label="${stat.name}" data-stat="${stat.id}">
                                 <span>ПРОВЕРКА</span> <div class="mod-val" id="${stat.id}_mod">+0</div>
                             </div>
                             <div class="action-item roll-trigger" data-label="${stat.name} (Спас)" data-stat="${stat.id}">
