@@ -3,6 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <link rel="stylesheet" href="style.css">
+    <style>
+        #debug-log {
+            background: #1a1a1a;
+            color: #ff4444;
+            font-family: monospace;
+            font-size: 10px;
+            padding: 5px;
+            max-height: 100px;
+            overflow-y: auto;
+            border-top: 1px solid #333;
+            white-space: pre-wrap;
+            display: block;
+        }
+    </style>
 </head>
 <body>
     <div id="app">
@@ -11,7 +25,8 @@
         </div>
         <div id="stats-list"></div>
         <div class="footer">
-            <p id="status">Готов к игре (v1.31.0)</p>
+            <p id="status">Готов (v1.32.0)</p>
+            <div id="debug-log">Log: Extension initialized...</div>
         </div>
     </div>
 
@@ -27,6 +42,12 @@
             { id: 'cha', name: 'ХАРИЗМА', skills: ['Выступление', 'Запугивание', 'Обман', 'Убеждение'] }
         ];
 
+        function logDebug(msg) {
+            const el = document.getElementById('debug-log');
+            if (el) el.innerText += "\n" + msg;
+            console.log(msg);
+        }
+
         async function rollOnMap(label, statId) {
             const input = document.getElementById(statId);
             const mod = Math.floor(((input ? input.value : 10) - 10) / 2);
@@ -36,26 +57,30 @@
             const total = d20 + mod;
 
             try {
-                // Проверяем, готова ли сцена
-                const isReady = await OBR.scene.isReady();
-                if (!isReady) {
-                    alert("Сцена не загружена. Открой карту!");
-                    return;
+                // Пока не починим viewport, используем 0,0 или пробуем альтернативный метод
+                let position = { x: 0, y: 0 };
+                
+                try {
+                    if (OBR.viewport && typeof OBR.viewport.getBounds === 'function') {
+                        const bounds = await OBR.viewport.getBounds();
+                        position = {
+                            x: (bounds.min.x + bounds.max.x) / 2,
+                            y: (bounds.min.y + bounds.max.y) / 2
+                        };
+                    } else {
+                        logDebug("Warning: OBR.viewport.getBounds is missing, using 0,0");
+                    }
+                } catch (vErr) {
+                    logDebug("Viewport Error: " + vErr.message);
                 }
-
-                // Получаем границы видимой области (Documentation: viewport.getBounds)
-                const bounds = await OBR.viewport.getBounds();
-                const centerX = (bounds.min.x + bounds.max.x) / 2;
-                const centerY = (bounds.min.y + bounds.max.y) / 2;
 
                 const baseId = `dice_${Date.now()}`;
                 
-                // Создаем кубик (Label)
                 const diceItem = {
                     id: baseId,
                     type: "LABEL",
-                    name: "DiceResult",
-                    position: { x: centerX, y: centerY },
+                    name: "Dice",
+                    position: position,
                     visible: true,
                     layer: "CHARACTER",
                     text: {
@@ -67,57 +92,52 @@
                             textAlign: "CENTER",
                             verticalAlign: "MIDDLE",
                             padding: 20,
-                            backgroundColor: d20 === 20 ? "#FFD700" : (d20 === 1 ? "#8B0000" : "#3F51B5"),
+                            backgroundColor: d20 === 20 ? "#D4AF37" : (d20 === 1 ? "#330000" : "#4361ee"),
                             backgroundOpacity: 1,
                             borderRadius: 25,
                             borderWidth: 8,
-                            borderColor: "#FFFFFF"
+                            borderColor: "#ffffff"
                         },
                         width: 160,
                         height: 160
-                    },
-                    metadata: { "ru.dnd.sheet/dice": true }
+                    }
                 };
 
-                // Подпись броска
                 const tagItem = {
                     id: baseId + "_tag",
                     type: "LABEL",
-                    name: "DiceTag",
-                    position: { x: centerX, y: centerY - 130 },
+                    position: { x: position.x, y: position.y - 120 },
                     visible: true,
                     layer: "CHARACTER",
                     text: {
                         plainText: `${charName}: ${label}`,
                         style: {
                             fillColor: "#ffffff",
-                            fontSize: 32,
+                            fontSize: 30,
                             textAlign: "CENTER",
-                            backgroundColor: "#212121",
+                            backgroundColor: "#111111",
                             backgroundOpacity: 0.9,
                             padding: 10,
-                            borderRadius: 10
+                            borderRadius: 8
                         },
                         width: 400,
                         height: 80
                     }
                 };
 
-                // Добавляем предметы (Documentation: scene.items.addItems)
                 await OBR.scene.items.addItems([diceItem, tagItem]);
+                logDebug(`Roll Success: ${charName} rolled ${total}`);
 
-                // Удаляем через 8 секунд (Documentation: scene.items.deleteItems)
                 setTimeout(async () => {
                     await OBR.scene.items.deleteItems([baseId, baseId + "_tag"]);
-                }, 8000);
+                }, 7000);
 
             } catch (e) {
-                console.error("Ошибка броска:", e);
-                document.getElementById('status').innerText = "Ошибка броска!";
+                logDebug(`CRITICAL ERROR: ${e.message}\nStack: ${e.stack}`);
             }
         }
 
-        // --- Интерфейс и логика синхронизации ---
+        // --- UI Logic ---
         function buildUI() {
             const container = document.getElementById('stats-list');
             if (!container) return;
@@ -155,8 +175,8 @@
                 if (!input) return;
                 const mod = Math.floor((input.value - 10) / 2);
                 const modStr = (mod >= 0 ? '+' : '') + mod;
-                if (document.getElementById(`${stat.id}_mod`)) document.getElementById(`${stat.id}_mod`).innerText = modStr;
-                if (document.getElementById(`${stat.id}_save`)) document.getElementById(`${stat.id}_save`).innerText = modStr;
+                document.getElementById(`${stat.id}_mod`).innerText = modStr;
+                document.getElementById(`${stat.id}_save`).innerText = modStr;
                 stat.skills.forEach(skill => {
                     const el = document.getElementById(`${stat.id}_${skill}`);
                     if (el) el.innerText = modStr;
@@ -167,15 +187,16 @@
 
         async function autoSave() {
             const data = { name: document.getElementById('charName').value };
-            SCHEMA.forEach(s => {
-                const input = document.getElementById(s.id);
-                if (input) data[s.id] = input.value;
-            });
+            SCHEMA.forEach(s => data[s.id] = document.getElementById(s.id).value);
             await OBR.player.setMetadata({ "ru_dnd_sheet/v2": data });
         }
 
         OBR.onReady(async () => {
             buildUI();
+            logDebug("SDK Ready check:");
+            logDebug("- OBR.scene: " + (typeof OBR.scene));
+            logDebug("- OBR.viewport: " + (typeof OBR.viewport));
+            
             const metadata = await OBR.player.getMetadata();
             const data = metadata["ru_dnd_sheet/v2"];
             if (data) {
