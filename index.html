@@ -5,16 +5,15 @@
     <link rel="stylesheet" href="style.css">
     <style>
         #debug-log {
-            background: #1a1a1a;
-            color: #ff4444;
-            font-family: monospace;
-            font-size: 10px;
-            padding: 5px;
-            max-height: 100px;
+            background: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            padding: 8px;
+            max-height: 120px;
             overflow-y: auto;
-            border-top: 1px solid #333;
+            border-top: 2px solid #444;
             white-space: pre-wrap;
-            display: block;
         }
     </style>
 </head>
@@ -25,8 +24,8 @@
         </div>
         <div id="stats-list"></div>
         <div class="footer">
-            <p id="status">Готов (v1.32.0)</p>
-            <div id="debug-log">Log: Extension initialized...</div>
+            <p id="status">v1.33.0 - Ready</p>
+            <div id="debug-log"></div>
         </div>
     </div>
 
@@ -42,13 +41,16 @@
             { id: 'cha', name: 'ХАРИЗМА', skills: ['Выступление', 'Запугивание', 'Обман', 'Убеждение'] }
         ];
 
-        function logDebug(msg) {
+        function log(msg) {
             const el = document.getElementById('debug-log');
-            if (el) el.innerText += "\n" + msg;
-            console.log(msg);
+            if (el) {
+                el.innerText += `\n[${new Date().toLocaleTimeString()}] ${msg}`;
+                el.scrollTop = el.scrollHeight;
+            }
         }
 
         async function rollOnMap(label, statId) {
+            log(`Starting roll for ${label}...`);
             const input = document.getElementById(statId);
             const mod = Math.floor(((input ? input.value : 10) - 10) / 2);
             const charName = document.getElementById('charName').value || "Герой";
@@ -57,87 +59,51 @@
             const total = d20 + mod;
 
             try {
-                // Пока не починим viewport, используем 0,0 или пробуем альтернативный метод
-                let position = { x: 0, y: 0 };
-                
-                try {
-                    if (OBR.viewport && typeof OBR.viewport.getBounds === 'function') {
-                        const bounds = await OBR.viewport.getBounds();
-                        position = {
-                            x: (bounds.min.x + bounds.max.x) / 2,
-                            y: (bounds.min.y + bounds.max.y) / 2
-                        };
-                    } else {
-                        logDebug("Warning: OBR.viewport.getBounds is missing, using 0,0");
-                    }
-                } catch (vErr) {
-                    logDebug("Viewport Error: " + vErr.message);
+                // 1. Проверка метода
+                if (!OBR.scene.items || !OBR.scene.items.addItems) {
+                    throw new Error("OBR.scene.items.addItems is not available");
                 }
 
-                const baseId = `dice_${Date.now()}`;
-                
+                // 2. Создаем минимально возможный объект по документации
                 const diceItem = {
-                    id: baseId,
+                    id: `d_${Date.now()}`,
                     type: "LABEL",
                     name: "Dice",
-                    position: position,
+                    position: { x: 0, y: 0 },
                     visible: true,
                     layer: "CHARACTER",
                     text: {
-                        plainText: `${total}`,
+                        plainText: `${charName}: ${total} (${label})`,
                         style: {
                             fillColor: "#ffffff",
-                            fontSize: 80,
-                            fontWeight: 800,
+                            fontSize: 40,
+                            fontWeight: 700,
                             textAlign: "CENTER",
                             verticalAlign: "MIDDLE",
-                            padding: 20,
-                            backgroundColor: d20 === 20 ? "#D4AF37" : (d20 === 1 ? "#330000" : "#4361ee"),
+                            backgroundColor: d20 === 20 ? "#ff0" : "#44f",
                             backgroundOpacity: 1,
-                            borderRadius: 25,
-                            borderWidth: 8,
-                            borderColor: "#ffffff"
-                        },
-                        width: 160,
-                        height: 160
-                    }
-                };
-
-                const tagItem = {
-                    id: baseId + "_tag",
-                    type: "LABEL",
-                    position: { x: position.x, y: position.y - 120 },
-                    visible: true,
-                    layer: "CHARACTER",
-                    text: {
-                        plainText: `${charName}: ${label}`,
-                        style: {
-                            fillColor: "#ffffff",
-                            fontSize: 30,
-                            textAlign: "CENTER",
-                            backgroundColor: "#111111",
-                            backgroundOpacity: 0.9,
-                            padding: 10,
-                            borderRadius: 8
+                            padding: 10
                         },
                         width: 400,
-                        height: 80
+                        height: 100
                     }
                 };
 
-                await OBR.scene.items.addItems([diceItem, tagItem]);
-                logDebug(`Roll Success: ${charName} rolled ${total}`);
+                log("Attempting to addItems...");
+                await OBR.scene.items.addItems([diceItem]);
+                log("SUCCESS: Item added to scene.");
 
-                setTimeout(async () => {
-                    await OBR.scene.items.deleteItems([baseId, baseId + "_tag"]);
-                }, 7000);
+                // Удаление
+                setTimeout(() => {
+                    OBR.scene.items.deleteItems([diceItem.id]).catch(e => log("Delete fail: " + e.message));
+                }, 5000);
 
             } catch (e) {
-                logDebug(`CRITICAL ERROR: ${e.message}\nStack: ${e.stack}`);
+                log("ROLL ERROR: " + e.message);
+                console.error(e);
             }
         }
 
-        // --- UI Logic ---
         function buildUI() {
             const container = document.getElementById('stats-list');
             if (!container) return;
@@ -193,9 +159,9 @@
 
         OBR.onReady(async () => {
             buildUI();
-            logDebug("SDK Ready check:");
-            logDebug("- OBR.scene: " + (typeof OBR.scene));
-            logDebug("- OBR.viewport: " + (typeof OBR.viewport));
+            log("SDK Ready. Checking Scene...");
+            const ready = await OBR.scene.isReady();
+            log("Scene Ready: " + ready);
             
             const metadata = await OBR.player.getMetadata();
             const data = metadata["ru_dnd_sheet/v2"];
