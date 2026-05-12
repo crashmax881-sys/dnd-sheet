@@ -4,40 +4,8 @@
     <meta charset="UTF-8">
     <link rel="stylesheet" href="style.css">
     <style>
-        /* Стили для встроенного кубика */
-        #dice-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8);
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            color: white;
-            font-family: sans-serif;
-        }
-        .dice {
-            width: 100px;
-            height: 100px;
-            background: #ff4444;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 40px;
-            font-weight: bold;
-            border-radius: 10px;
-            box-shadow: 0 0 20px rgba(255,68,68,0.5);
-            margin-bottom: 20px;
-            animation: roll 0.6s ease-out;
-        }
-        @keyframes roll {
-            0% { transform: rotate(0deg) scale(0.1); }
-            50% { transform: rotate(720deg) scale(1.2); }
-            100% { transform: rotate(1080deg) scale(1); }
-        }
-        .roll-result { font-size: 24px; text-align: center; }
-        .roll-total { font-size: 48px; color: #00ffcc; margin-top: 10px; }
+        /* Стиль для локального предпросмотра (опционально) */
+        .local-status { font-style: italic; color: #888; font-size: 12px; }
     </style>
 </head>
 <body>
@@ -46,14 +14,9 @@
             <input type="text" id="charName" placeholder="Имя персонажа...">
         </div>
         <div id="stats-list"></div>
-        <div class="footer"><p id="status">Готов (v1.26.0)</p></div>
-    </div>
-
-    <div id="dice-overlay" onclick="this.style.display='none'">
-        <div id="dice-visual" class="dice">20</div>
-        <div class="roll-result" id="roll-label">Проверка Силы</div>
-        <div class="roll-total" id="roll-total-val">23</div>
-        <p style="margin-top: 20px; opacity: 0.6;">Нажми, чтобы закрыть</p>
+        <div class="footer">
+            <p id="status">Готов к броскам на поле (v1.27.0)</p>
+        </div>
     </div>
 
     <script type="module">
@@ -63,11 +26,100 @@
             { id: 'str', name: 'СИЛА', skills: ['Атлетика'] },
             { id: 'dex', name: 'ЛОВКОСТЬ', skills: ['Акробатика', 'Ловкость рук', 'Скрытность'] },
             { id: 'con', name: 'ТЕЛОСЛОЖЕНИЕ', skills: [] },
-            { id: 'int', name: 'ИНТЕЛЛЕКТ', skills: ['Анализ', 'История', 'Магия', 'Природа', 'Религия'] },
+            { id: 'int', name: 'ИНТЕЛЛЕКТ', skills: ['Анализ', 'История', 'Magic', 'Природа', 'Религия'] },
             { id: 'wis', name: 'МУДРОСТЬ', skills: ['Внимательность', 'Выживание', 'Медицина', 'Проницательность', 'Уход за животными'] },
             { id: 'cha', name: 'ХАРИЗМА', skills: ['Выступление', 'Запугивание', 'Обман', 'Убеждение'] }
         ];
 
+        // Функция генерации броска на поле
+        async function rollOnMap(label, statId) {
+            const mod = Math.floor((document.getElementById(statId).value - 10) / 2);
+            const charName = document.getElementById('charName').value || "Герой";
+            
+            const d20 = Math.floor(Math.random() * 20) + 1;
+            const total = d20 + mod;
+
+            // 1. Отправляем в чат для истории
+            OBR.chat.sendMessage(`${charName}: ${label} ➔ **${total}** (d20[${d20}] ${mod >= 0 ? '+' : ''}${mod})`);
+
+            // 2. Создаем "объемный" кубик на карте
+            // Получаем центр текущего вида игрока, чтобы спавнить кубик перед глазами
+            const viewport = await OBR.viewport.getRect();
+            const center = {
+                x: viewport.x + viewport.width / 2,
+                y: viewport.y + viewport.height / 2
+            };
+
+            const diceId = `dice_${Date.now()}`;
+            
+            // Текстовый элемент с эффектом объема (используем Label)
+            const diceItem = {
+                id: diceId,
+                type: "LABEL",
+                name: "Dice Roll",
+                position: center,
+                attachedTo: "",
+                locked: false,
+                visible: true,
+                rotation: (Math.random() * 20) - 10, // Легкий случайный наклон
+                text: {
+                    plainText: `${total}`,
+                    style: {
+                        fillColor: "#ffffff",
+                        fillOpacity: 1,
+                        fontSize: 60,
+                        fontFamily: "Roboto, sans-serif",
+                        fontWeight: 800,
+                        textAlign: "CENTER",
+                        verticalAlign: "MIDDLE",
+                        lineHeight: 1.2,
+                        padding: 20,
+                        outlineColor: "#000000",
+                        outlineWidth: 4,
+                        // Имитация объема через подложку (background)
+                        backgroundColor: d20 === 20 ? "#ff0000" : "#4444ff",
+                        backgroundOpacity: 1,
+                        borderRadius: 15,
+                        borderWidth: 5,
+                        borderColor: "#ffffff"
+                    },
+                    richText: [],
+                    width: 120,
+                    height: 120
+                },
+                metadata: { "isDice": true }
+            };
+
+            // Добавляем описание (кто и что кинул) вторым элементом чуть выше
+            const labelItem = {
+                id: diceId + "_label",
+                type: "LABEL",
+                position: { x: center.x, y: center.y - 100 },
+                text: {
+                    plainText: `${charName}\n${label}`,
+                    style: {
+                        fillColor: "#ffffff",
+                        fontSize: 24,
+                        textAlign: "CENTER",
+                        backgroundColor: "#222222",
+                        backgroundOpacity: 0.8,
+                        padding: 10,
+                        borderRadius: 5
+                    },
+                    width: 300,
+                    height: 80
+                }
+            };
+
+            await OBR.scene.local.addItems([diceItem, labelItem]);
+
+            // Автоматическое удаление через 5 секунд
+            setTimeout(async () => {
+                await OBR.scene.local.removeItems([diceId, diceId + "_label"]);
+            }, 5000);
+        }
+
+        // --- Стандартные функции UI ---
         function buildUI() {
             const container = document.getElementById('stats-list');
             if (!container) return;
@@ -80,8 +132,8 @@
                             <div class="action-item roll-trigger" data-label="${stat.name} (Проверка)" data-stat="${stat.id}">
                                 <span>ПРОВЕРКА</span> <div class="mod-val" id="${stat.id}_mod">+0</div>
                             </div>
-                            <div class="action-item roll-trigger" data-label="${stat.name} (Спасбросок)" data-stat="${stat.id}">
-                                <span>СПАСБРОСОК</span> <div class="mod-val" id="${stat.id}_save">+0</div>
+                            <div class="action-item roll-trigger" data-label="${stat.name} (Спас)" data-stat="${stat.id}">
+                                <span>СПАС</span> <div class="mod-val" id="${stat.id}_save">+0</div>
                             </div>
                         </div>
                         <div class="skills-list">
@@ -91,15 +143,15 @@
                 `);
             });
             document.querySelectorAll('.roll-trigger').forEach(el => {
-                el.onclick = () => localRoll(el.getAttribute('data-label'), el.getAttribute('data-stat'));
+                el.onclick = () => rollOnMap(el.getAttribute('data-label'), el.getAttribute('data-stat'));
             });
             SCHEMA.forEach(stat => document.getElementById(stat.id).oninput = updateAll);
         }
 
         function updateAll() {
             SCHEMA.forEach(stat => {
-                const val = document.getElementById(stat.id).value;
-                const mod = Math.floor((val - 10) / 2);
+                const input = document.getElementById(stat.id);
+                const mod = Math.floor((input.value - 10) / 2);
                 const modStr = (mod >= 0 ? '+' : '') + mod;
                 if (document.getElementById(`${stat.id}_mod`)) document.getElementById(`${stat.id}_mod`).innerText = modStr;
                 if (document.getElementById(`${stat.id}_save`)) document.getElementById(`${stat.id}_save`).innerText = modStr;
@@ -109,30 +161,6 @@
                 });
             });
             autoSave();
-        }
-
-        function localRoll(label, statId) {
-            const mod = Math.floor((document.getElementById(statId).value - 10) / 2);
-            const charName = document.getElementById('charName').value || "Герой";
-            
-            // Логика броска 
-            const d20 = Math.floor(Math.random() * 20) + 1;
-            const total = d20 + mod;
-
-            // Показ анимации 
-            const overlay = document.getElementById('dice-overlay');
-            const visual = document.getElementById('dice-visual');
-            const labelEl = document.getElementById('roll-label');
-            const totalEl = document.getElementById('roll-total-val');
-
-            visual.innerText = d20;
-            labelEl.innerText = `${charName}: ${label} (мод. ${mod >= 0 ? '+' : ''}${mod})`;
-            totalEl.innerText = total;
-
-            overlay.style.display = 'flex';
-            
-            // Также отправляем текст в чат Owlbear Rodeo, если нужно
-            OBR.chat.sendMessage(`${charName} бросает ${label}: **${total}** (1d20[${d20}] ${mod >= 0 ? '+' : ''}${mod})`);
         }
 
         async function autoSave() {
