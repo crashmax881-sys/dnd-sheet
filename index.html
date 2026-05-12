@@ -3,10 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <link rel="stylesheet" href="style.css">
-    <style>
-        /* Стиль для локального предпросмотра (опционально) */
-        .local-status { font-style: italic; color: #888; font-size: 12px; }
-    </style>
 </head>
 <body>
     <div id="app">
@@ -15,7 +11,7 @@
         </div>
         <div id="stats-list"></div>
         <div class="footer">
-            <p id="status">Готов к броскам на поле (v1.27.0)</p>
+            <p id="status">Готов (v1.29.0)</p>
         </div>
     </div>
 
@@ -26,100 +22,93 @@
             { id: 'str', name: 'СИЛА', skills: ['Атлетика'] },
             { id: 'dex', name: 'ЛОВКОСТЬ', skills: ['Акробатика', 'Ловкость рук', 'Скрытность'] },
             { id: 'con', name: 'ТЕЛОСЛОЖЕНИЕ', skills: [] },
-            { id: 'int', name: 'ИНТЕЛЛЕКТ', skills: ['Анализ', 'История', 'Magic', 'Природа', 'Религия'] },
+            { id: 'int', name: 'ИНТЕЛЛЕКТ', skills: ['Анализ', 'История', 'Магия', 'Природа', 'Религия'] },
             { id: 'wis', name: 'МУДРОСТЬ', skills: ['Внимательность', 'Выживание', 'Медицина', 'Проницательность', 'Уход за животными'] },
             { id: 'cha', name: 'ХАРИЗМА', skills: ['Выступление', 'Запугивание', 'Обман', 'Убеждение'] }
         ];
 
-        // Функция генерации броска на поле
         async function rollOnMap(label, statId) {
-            const mod = Math.floor((document.getElementById(statId).value - 10) / 2);
+            const input = document.getElementById(statId);
+            const mod = Math.floor(((input ? input.value : 10) - 10) / 2);
             const charName = document.getElementById('charName').value || "Герой";
             
             const d20 = Math.floor(Math.random() * 20) + 1;
             const total = d20 + mod;
 
-            // 1. Отправляем в чат для истории
-            OBR.chat.sendMessage(`${charName}: ${label} ➔ **${total}** (d20[${d20}] ${mod >= 0 ? '+' : ''}${mod})`);
+            try {
+                const viewport = await OBR.viewport.getRect();
+                const center = {
+                    x: viewport.x + viewport.width / 2,
+                    y: viewport.y + viewport.height / 2
+                };
 
-            // 2. Создаем "объемный" кубик на карте
-            // Получаем центр текущего вида игрока, чтобы спавнить кубик перед глазами
-            const viewport = await OBR.viewport.getRect();
-            const center = {
-                x: viewport.x + viewport.width / 2,
-                y: viewport.y + viewport.height / 2
-            };
+                const baseId = `dice_${Date.now()}`;
+                
+                // Создаем кубик как Label
+                const diceItem = {
+                    id: baseId,
+                    type: "LABEL",
+                    name: "DiceResult",
+                    position: center,
+                    visible: true,
+                    layer: "MOUNT",
+                    text: {
+                        plainText: `${total}`,
+                        style: {
+                            fillColor: "#ffffff",
+                            fontSize: 80,
+                            fontWeight: 800,
+                            textAlign: "CENTER",
+                            verticalAlign: "MIDDLE",
+                            padding: 20,
+                            backgroundColor: d20 === 20 ? "#D4AF37" : (d20 === 1 ? "#330000" : "#4361ee"),
+                            backgroundOpacity: 1,
+                            borderRadius: 25,
+                            borderWidth: 8,
+                            borderColor: "#ffffff"
+                        },
+                        width: 160,
+                        height: 160
+                    }
+                };
 
-            const diceId = `dice_${Date.now()}`;
-            
-            // Текстовый элемент с эффектом объема (используем Label)
-            const diceItem = {
-                id: diceId,
-                type: "LABEL",
-                name: "Dice Roll",
-                position: center,
-                attachedTo: "",
-                locked: false,
-                visible: true,
-                rotation: (Math.random() * 20) - 10, // Легкий случайный наклон
-                text: {
-                    plainText: `${total}`,
-                    style: {
-                        fillColor: "#ffffff",
-                        fillOpacity: 1,
-                        fontSize: 60,
-                        fontFamily: "Roboto, sans-serif",
-                        fontWeight: 800,
-                        textAlign: "CENTER",
-                        verticalAlign: "MIDDLE",
-                        lineHeight: 1.2,
-                        padding: 20,
-                        outlineColor: "#000000",
-                        outlineWidth: 4,
-                        // Имитация объема через подложку (background)
-                        backgroundColor: d20 === 20 ? "#ff0000" : "#4444ff",
-                        backgroundOpacity: 1,
-                        borderRadius: 15,
-                        borderWidth: 5,
-                        borderColor: "#ffffff"
-                    },
-                    richText: [],
-                    width: 120,
-                    height: 120
-                },
-                metadata: { "isDice": true }
-            };
+                // Надпись над кубиком
+                const nameTag = {
+                    id: baseId + "_tag",
+                    type: "LABEL",
+                    name: "DiceTag",
+                    position: { x: center.x, y: center.y - 120 },
+                    visible: true,
+                    layer: "MOUNT",
+                    text: {
+                        plainText: `${charName}\n${label}`,
+                        style: {
+                            fillColor: "#ffffff",
+                            fontSize: 30,
+                            textAlign: "CENTER",
+                            backgroundColor: "#111111",
+                            backgroundOpacity: 0.85,
+                            padding: 10,
+                            borderRadius: 8
+                        },
+                        width: 400,
+                        height: 90
+                    }
+                };
 
-            // Добавляем описание (кто и что кинул) вторым элементом чуть выше
-            const labelItem = {
-                id: diceId + "_label",
-                type: "LABEL",
-                position: { x: center.x, y: center.y - 100 },
-                text: {
-                    plainText: `${charName}\n${label}`,
-                    style: {
-                        fillColor: "#ffffff",
-                        fontSize: 24,
-                        textAlign: "CENTER",
-                        backgroundColor: "#222222",
-                        backgroundOpacity: 0.8,
-                        padding: 10,
-                        borderRadius: 5
-                    },
-                    width: 300,
-                    height: 80
-                }
-            };
+                // ИСПОЛЬЗУЕМ КОРРЕКТНЫЙ МЕТОД addItems СОГЛАСНО ДОКУМЕНТАЦИИ
+                await OBR.scene.items.addItems([diceItem, nameTag]);
 
-            await OBR.scene.local.addItems([diceItem, labelItem]);
+                // Удаление через 7 секунд
+                setTimeout(async () => {
+                    await OBR.scene.items.deleteItems([baseId, baseId + "_tag"]);
+                }, 7000);
 
-            // Автоматическое удаление через 5 секунд
-            setTimeout(async () => {
-                await OBR.scene.local.removeItems([diceId, diceId + "_label"]);
-            }, 5000);
+            } catch (e) {
+                console.error("Ошибка при выполнении броска:", e);
+            }
         }
 
-        // --- Стандартные функции UI ---
         function buildUI() {
             const container = document.getElementById('stats-list');
             if (!container) return;
@@ -145,12 +134,16 @@
             document.querySelectorAll('.roll-trigger').forEach(el => {
                 el.onclick = () => rollOnMap(el.getAttribute('data-label'), el.getAttribute('data-stat'));
             });
-            SCHEMA.forEach(stat => document.getElementById(stat.id).oninput = updateAll);
+            SCHEMA.forEach(stat => {
+                const el = document.getElementById(stat.id);
+                if (el) el.oninput = updateAll;
+            });
         }
 
         function updateAll() {
             SCHEMA.forEach(stat => {
                 const input = document.getElementById(stat.id);
+                if (!input) return;
                 const mod = Math.floor((input.value - 10) / 2);
                 const modStr = (mod >= 0 ? '+' : '') + mod;
                 if (document.getElementById(`${stat.id}_mod`)) document.getElementById(`${stat.id}_mod`).innerText = modStr;
@@ -165,7 +158,10 @@
 
         async function autoSave() {
             const data = { name: document.getElementById('charName').value };
-            SCHEMA.forEach(s => data[s.id] = document.getElementById(s.id).value);
+            SCHEMA.forEach(s => {
+                const input = document.getElementById(s.id);
+                if (input) data[s.id] = input.value;
+            });
             await OBR.player.setMetadata({ "ru_dnd_sheet/v2": data });
         }
 
@@ -175,7 +171,10 @@
             const data = metadata["ru_dnd_sheet/v2"];
             if (data) {
                 document.getElementById('charName').value = data.name || "";
-                SCHEMA.forEach(s => { if (data[s.id]) document.getElementById(s.id).value = data[s.id]; });
+                SCHEMA.forEach(s => { 
+                    const input = document.getElementById(s.id);
+                    if (input && data[s.id]) input.value = data[s.id]; 
+                });
             }
             updateAll();
             document.getElementById('charName').oninput = autoSave;
