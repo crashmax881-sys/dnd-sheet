@@ -3,6 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <link rel="stylesheet" href="style.css">
+    <style>
+        /* Стили для встроенного кубика */
+        #dice-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            color: white;
+            font-family: sans-serif;
+        }
+        .dice {
+            width: 100px;
+            height: 100px;
+            background: #ff4444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            font-weight: bold;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(255,68,68,0.5);
+            margin-bottom: 20px;
+            animation: roll 0.6s ease-out;
+        }
+        @keyframes roll {
+            0% { transform: rotate(0deg) scale(0.1); }
+            50% { transform: rotate(720deg) scale(1.2); }
+            100% { transform: rotate(1080deg) scale(1); }
+        }
+        .roll-result { font-size: 24px; text-align: center; }
+        .roll-total { font-size: 48px; color: #00ffcc; margin-top: 10px; }
+    </style>
 </head>
 <body>
     <div id="app">
@@ -10,19 +46,18 @@
             <input type="text" id="charName" placeholder="Имя персонажа...">
         </div>
         <div id="stats-list"></div>
-        <div class="footer">
-            <p id="status">Готов (v1.25.0)</p>
-        </div>
+        <div class="footer"><p id="status">Готов (v1.26.0)</p></div>
+    </div>
+
+    <div id="dice-overlay" onclick="this.style.display='none'">
+        <div id="dice-visual" class="dice">20</div>
+        <div class="roll-result" id="roll-label">Проверка Силы</div>
+        <div class="roll-total" id="roll-total-val">23</div>
+        <p style="margin-top: 20px; opacity: 0.6;">Нажми, чтобы закрыть</p>
     </div>
 
     <script type="module">
         import OBR from "https://cdn.skypack.dev/@owlbear-rodeo/sdk";
-
-        const API_KEY = "YGz09N0ieJkYsDTYlEOORaEjwHfmUCsZyzbJVq5Tccc4b24e"; 
-        const ROOM_SLUG = "VaKE-Br";
-        
-        // Тема из твоего успешного лога: "dddice-bees"
-        const SYSTEM_THEME = "dddice-bees"; 
 
         const SCHEMA = [
             { id: 'str', name: 'СИЛА', skills: ['Атлетика'] },
@@ -42,10 +77,10 @@
                     <div class="stat-group">
                         <div class="stat-header"><span>${stat.name}</span><input type="number" id="${stat.id}" value="10"></div>
                         <div class="stat-actions">
-                            <div class="action-item roll-trigger" data-label="${stat.name}" data-stat="${stat.id}">
+                            <div class="action-item roll-trigger" data-label="${stat.name} (Проверка)" data-stat="${stat.id}">
                                 <span>ПРОВЕРКА</span> <div class="mod-val" id="${stat.id}_mod">+0</div>
                             </div>
-                            <div class="action-item roll-trigger" data-label="${stat.name} (Спас)" data-stat="${stat.id}">
+                            <div class="action-item roll-trigger" data-label="${stat.name} (Спасбросок)" data-stat="${stat.id}">
                                 <span>СПАСБРОСОК</span> <div class="mod-val" id="${stat.id}_save">+0</div>
                             </div>
                         </div>
@@ -56,19 +91,15 @@
                 `);
             });
             document.querySelectorAll('.roll-trigger').forEach(el => {
-                el.onclick = () => sendDiceRoll(el.getAttribute('data-label'), el.getAttribute('data-stat'));
+                el.onclick = () => localRoll(el.getAttribute('data-label'), el.getAttribute('data-stat'));
             });
-            SCHEMA.forEach(stat => {
-                const input = document.getElementById(stat.id);
-                if (input) input.oninput = updateAll;
-            });
+            SCHEMA.forEach(stat => document.getElementById(stat.id).oninput = updateAll);
         }
 
         function updateAll() {
             SCHEMA.forEach(stat => {
-                const input = document.getElementById(stat.id);
-                if (!input) return;
-                const mod = Math.floor((input.value - 10) / 2);
+                const val = document.getElementById(stat.id).value;
+                const mod = Math.floor((val - 10) / 2);
                 const modStr = (mod >= 0 ? '+' : '') + mod;
                 if (document.getElementById(`${stat.id}_mod`)) document.getElementById(`${stat.id}_mod`).innerText = modStr;
                 if (document.getElementById(`${stat.id}_save`)) document.getElementById(`${stat.id}_save`).innerText = modStr;
@@ -80,53 +111,33 @@
             autoSave();
         }
 
-        async function sendDiceRoll(label, statId) {
+        function localRoll(label, statId) {
             const mod = Math.floor((document.getElementById(statId).value - 10) / 2);
             const charName = document.getElementById('charName').value || "Герой";
-            const status = document.getElementById('status');
+            
+            // Логика броска 
+            const d20 = Math.floor(Math.random() * 20) + 1;
+            const total = d20 + mod;
 
-            status.innerText = "🎲 Бросаю...";
+            // Показ анимации 
+            const overlay = document.getElementById('dice-overlay');
+            const visual = document.getElementById('dice-visual');
+            const labelEl = document.getElementById('roll-label');
+            const totalEl = document.getElementById('roll-total-val');
 
-            try {
-                // В логе используется 'id' вместо 'type' и тема 'dddice-bees'
-                const response = await fetch("https://dddice.com/api/1.0/roll", {
-                    method: "POST",
-                    headers: {
-                        "Authorization": "Bearer " + API_KEY,
-                        "Content-Type": "application/json",
-                        "Accept": "application/json"
-                    },
-                    body: JSON.stringify({
-                        room: ROOM_SLUG,
-                        dice: [{ 
-                            id: "d20", 
-                            theme: SYSTEM_THEME 
-                        }],
-                        operator: { value: mod, type: "add" },
-                        label: `${charName}: ${label}`
-                    })
-                });
+            visual.innerText = d20;
+            labelEl.innerText = `${charName}: ${label} (мод. ${mod >= 0 ? '+' : ''}${mod})`;
+            totalEl.innerText = total;
 
-                if (response.ok) {
-                    status.innerText = "Успех!";
-                    status.style.color = "#00ffcc";
-                } else {
-                    const err = await response.json();
-                    status.innerText = "Ошибка: " + response.status;
-                    status.style.color = "#ff4444";
-                }
-            } catch (e) { 
-                status.innerText = "Ошибка сети"; 
-            }
-            setTimeout(() => { status.style.color = ""; status.innerText = "Готов"; }, 2000);
+            overlay.style.display = 'flex';
+            
+            // Также отправляем текст в чат Owlbear Rodeo, если нужно
+            OBR.chat.sendMessage(`${charName} бросает ${label}: **${total}** (1d20[${d20}] ${mod >= 0 ? '+' : ''}${mod})`);
         }
 
         async function autoSave() {
             const data = { name: document.getElementById('charName').value };
-            SCHEMA.forEach(s => {
-                const input = document.getElementById(s.id);
-                if (input) data[s.id] = input.value;
-            });
+            SCHEMA.forEach(s => data[s.id] = document.getElementById(s.id).value);
             await OBR.player.setMetadata({ "ru_dnd_sheet/v2": data });
         }
 
@@ -136,10 +147,7 @@
             const data = metadata["ru_dnd_sheet/v2"];
             if (data) {
                 document.getElementById('charName').value = data.name || "";
-                SCHEMA.forEach(s => { 
-                    const input = document.getElementById(s.id);
-                    if (input && data[s.id]) input.value = data[s.id]; 
-                });
+                SCHEMA.forEach(s => { if (data[s.id]) document.getElementById(s.id).value = data[s.id]; });
             }
             updateAll();
             document.getElementById('charName').oninput = autoSave;
